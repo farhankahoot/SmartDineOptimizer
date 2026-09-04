@@ -260,21 +260,60 @@ Nothing on a screen is a hard-coded figure any more:
   selected" is not answerable from the data, and the screen says so instead of
   inventing it.
 
+## Security
+
+Deployment and hardening are covered in [DEPLOYMENT.md](DEPLOYMENT.md). In
+short:
+
+- The API **refuses to start** in production with a weak or placeholder
+  `JWT_SECRET`, a wildcard `CLIENT_ORIGIN`, or a plain-HTTP origin.
+- Accounts lock for 15 minutes after 5 failed sign-ins, and any one source is
+  capped at 40 failed attempts per 15 minutes so password spraying across many
+  accounts is caught too.
+- Sign-in never reveals whether an address is registered — same message, and a
+  bcrypt comparison runs even for a missing account so the timing matches.
+- Sessions are rows in the database, not just signed tokens, so blocking a user
+  or revoking a session takes effect on the next request. Idle sessions are
+  revoked after the configured timeout.
+- Helmet sets `default-src 'none'`, `frame-ancestors 'none'`, `nosniff`,
+  `no-referrer`, and HSTS in production.
+- The sign-in screen's demo-account panel is gated by the *server*, and is
+  refused outright in production.
+- The seed refuses to run against a production database.
+
+## Background jobs
+
+A single timer in `server/src/lib/scheduler.ts` runs three jobs every minute.
+Each re-reads its settings on every pass, so a change in the console takes
+effect without a restart:
+
+- **Reminders** (M8 FE-5) — sends a reminder the configured number of hours
+  before a booking. Sent once per booking; the notification log is the record,
+  so a restart cannot double-send.
+- **Expired holds** (M3 FE-5) — a pending request older than `holdMinutes`
+  releases its table and the guest is told, which is what the booking page's
+  "held for 10 minutes" notice promises.
+- **No-show close-out** — confirmed bookings are completed once their slot has
+  passed, releasing the table and clearing the live worklist.
+
+Set `RUN_SCHEDULER=false` on every instance but one when running more than one.
+
 ## Still outstanding
 
 - **Prediction models.** Module 5 FE-7 — storing and serving forecasts — is
   implemented: `PredictionOutput` holds them and `POST /predictions/ingest` is
   the contract a training service writes to. The models themselves are not
   trained; seeded rows are marked `model: "seed"` and the Prediction screen
-  shows an amber banner saying the figures are reference data, not a forecast.
+  shows a banner saying the figures are reference data, not a forecast.
 - **SMS and WhatsApp.** No gateway credentials exist, so those channels are
-  logged, never sent. Email sends for real once SMTP is set in `server/.env`;
-  until then messages are written to `NotificationLog` with delivery `Pending`
-  and printed to the server console, and the Communication screen says so.
+  logged with the reason recorded, never sent. All five templates default to
+  Email, which is the only channel with a real transport.
 - **Media storage.** Uploaded showcase covers are stored inline in the database
-  as data URLs. Move them to object storage before launch.
+  as data URLs. Move them to object storage before handling real volume.
 - **PDF export.** CSV is generated server-side. PDF uses the browser's own
-  print-to-PDF against a print stylesheet; there is no server-side renderer.
+  print-to-PDF against a print stylesheet.
+- **Automated tests.** Behaviour has been verified by driving the running
+  system; there is no regression suite.
 
 ## Implementation notes
 

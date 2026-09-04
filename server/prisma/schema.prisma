@@ -28,6 +28,13 @@ model User {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
+  // Brute-force protection. Consecutive failures lock the account for a
+  // configured window; any successful sign-in clears both fields.
+  failedAttempts    Int       @default(0)
+  lockedUntil       DateTime?
+  lastLoginAt       DateTime?
+  passwordChangedAt DateTime?
+
   sessions     Session[]
   auditEntries AuditEntry[]
   resetTokens  PasswordResetToken[]
@@ -37,16 +44,16 @@ model User {
 }
 
 model Session {
-  id        String    @id @default(cuid())
-  userId    String
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenId   String    @unique // jti claim, so a single session can be revoked
-  device    String    @default("Unknown device")
-  location  String    @default("—")
-  startedAt DateTime  @default(now())
-  lastSeenAt DateTime @default(now())
-  revokedAt DateTime?
-  expiresAt DateTime
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenId    String    @unique // jti claim, so a single session can be revoked
+  device     String    @default("Unknown device")
+  location   String    @default("—")
+  startedAt  DateTime  @default(now())
+  lastSeenAt DateTime  @default(now())
+  revokedAt  DateTime?
+  expiresAt  DateTime
 
   @@index([userId])
 }
@@ -222,17 +229,17 @@ model PredictionOutput {
 
 /// One row per trading day — the source series behind the dashboard and reports.
 model DailyMetric {
-  id                  String   @id @default(cuid())
-  date                String   @unique
-  reservations        Int      @default(0)
-  guests              Int      @default(0)
-  confirmed           Int      @default(0)
-  cancelled           Int      @default(0)
-  revenueMinor        Int      @default(0)
-  forecastRevenueMinor Int     @default(0)
-  wastagePct          Float    @default(0)
-  staffRequired       Int      @default(0)
-  createdAt           DateTime @default(now())
+  id                   String   @id @default(cuid())
+  date                 String   @unique
+  reservations         Int      @default(0)
+  guests               Int      @default(0)
+  confirmed            Int      @default(0)
+  cancelled            Int      @default(0)
+  revenueMinor         Int      @default(0)
+  forecastRevenueMinor Int      @default(0)
+  wastagePct           Float    @default(0)
+  staffRequired        Int      @default(0)
+  createdAt            DateTime @default(now())
 
   @@index([date])
 }

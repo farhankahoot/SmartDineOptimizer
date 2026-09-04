@@ -58,11 +58,6 @@ function toIso(display: string): string {
   return `${m[3]}-${String(month + 1).padStart(2, '0')}-${m[2].padStart(2, '0')}`
 }
 
-function isoToDisplay(iso: string): string {
-  const [y, mo, d] = iso.split('-').map(Number)
-  return `${MONTHS[mo - 1]} ${d}, ${y}`
-}
-
 function addDays(iso: string, days: number): string {
   const d = new Date(`${iso}T00:00:00Z`)
   d.setUTCDate(d.getUTCDate() + days)
@@ -272,6 +267,18 @@ function buildDailyMetrics() {
 /* ------------------------------------------------------------------- main */
 
 async function main() {
+  /**
+   * The seed creates demo accounts with known passwords and wipes every table
+   * first. Running it against a live database would both destroy real data and
+   * hand out working credentials, so it refuses unless explicitly forced.
+   */
+  if (process.env.NODE_ENV === 'production' && process.env.ALLOW_PRODUCTION_SEED !== 'true') {
+    console.error('Refusing to seed with NODE_ENV=production.')
+    console.error('This deletes every row and creates demo accounts with known passwords.')
+    console.error('Set ALLOW_PRODUCTION_SEED=true only if that is genuinely what you want.')
+    process.exit(1)
+  }
+
   console.log('Seeding SmartDine Optimizer…')
 
   // Wipe in dependency order so a re-seed is always clean.

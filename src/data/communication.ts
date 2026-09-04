@@ -47,10 +47,10 @@ export interface MessageTemplate {
 
 export const messageTemplates: MessageTemplate[] = [
   { id: 'T1', title: 'Reservation Confirmation', body: 'Hi [name], your reservation for [date] at [time] is confirmed. Table: [table]. Thank you!', channel: 'Email', active: true, icon: 'mail', color: '#2E9E63' },
-  { id: 'T2', title: 'Reservation Reminder', body: 'Hi [name], this is a reminder for your reservation on [date] at [time]. We look forward to serving you!', channel: 'SMS', active: true, icon: 'chat', color: '#3A7BD5' },
+  { id: 'T2', title: 'Reservation Reminder', body: 'Hi [name], this is a reminder for your reservation on [date] at [time]. We look forward to serving you!', channel: 'Email', active: true, icon: 'chat', color: '#3A7BD5' },
   { id: 'T3', title: 'Reservation Update', body: 'Hi [name], your reservation has been updated. New details: [date], [time], [table]. Thank you!', channel: 'Email', active: true, icon: 'edit', color: '#7B57C9' },
-  { id: 'T4', title: 'Reservation Cancellation', body: 'Hi [name], your reservation for [date] at [time] has been cancelled. We hope to see you again soon.', channel: 'SMS', active: true, icon: 'cancel', color: '#D9534F' },
-  { id: 'T5', title: 'Special Request Confirmation', body: 'Hi [name], your special request has been noted. We will take care of it!', channel: 'WhatsApp', active: true, icon: 'whatsapp', color: '#25A65B' },
+  { id: 'T4', title: 'Reservation Cancellation', body: 'Hi [name], your reservation for [date] at [time] has been cancelled. We hope to see you again soon.', channel: 'Email', active: true, icon: 'cancel', color: '#D9534F' },
+  { id: 'T5', title: 'Special Request Confirmation', body: 'Hi [name], your special request has been noted. We will take care of it!', channel: 'Email', active: true, icon: 'whatsapp', color: '#25A65B' },
 ]
 
 export const communicationActivity = [

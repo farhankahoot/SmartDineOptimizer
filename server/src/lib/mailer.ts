@@ -80,7 +80,14 @@ export async function sendMessage(input: SendInput): Promise<{ delivery: string;
   // as pending because no gateway credentials exist.
   const canDeliver = channel === 'Email' && Boolean(getTransporter())
   let delivery = canDeliver ? 'Sent' : 'Pending'
-  let error: string | null = null
+
+  // The log records *why* something was not delivered, so a pending row is
+  // never mistaken for a transient failure that will retry itself.
+  let error: string | null = canDeliver
+    ? null
+    : channel === 'Email'
+      ? 'No SMTP host configured — message recorded but not delivered.'
+      : `No ${channel} gateway configured — switch this template to Email to deliver it.`
 
   if (canDeliver) {
     try {

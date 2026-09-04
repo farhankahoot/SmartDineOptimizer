@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { z } from 'zod'
 import { prisma } from '../db.js'
-import { audit } from '../lib/audit.js'
+import { audit, notifyAdmins } from '../lib/audit.js'
 import {
   checkPasswordStrength,
   hashPassword,
@@ -16,9 +16,16 @@ import { badRequest, forbidden, notFound, parse, route, unauthorized } from '../
 import { permissionsFor, roleLabels, type Role } from '../lib/permissions.js'
 import { sendMessage } from '../lib/mailer.js'
 import { getSystem } from '../lib/settings.js'
+import { env } from '../env.js'
 import { requireAuth } from '../middleware/auth.js'
 
 export const authRouter = Router()
+
+/**
+ * A real bcrypt hash of a value nobody knows, compared against when the email
+ * does not exist so that both branches cost the same time.
+ */
+const DUMMY_HASH = '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy'
 
 const credentials = z.object({
   email: z.string().trim().toLowerCase().email('Enter a valid email address.'),
@@ -39,12 +46,59 @@ authRouter.post(
     const genericFailure = unauthorized('Email or password is incorrect.')
 
     if (!user) {
+      // Compare against a dummy hash anyway, so a missing account does not
+      // answer faster than a wrong password and reveal itself by timing.
+      await verifyPassword(password, DUMMY_HASH)
       await audit({ actorName: email, action: 'Failed sign-in attempt', target: email, category: 'Security', result: 'Failed' })
       throw genericFailure
     }
 
+    // Brute-force lockout, checked before the password is even compared.
+    if (user.lockedUntil && user.lockedUntil > new Date()) {
+      const minutes = Math.max(1, Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60_000))
+      await audit({ actorId: user.id, actorName: user.name, action: 'Sign-in attempt on locked account', target: email, category: 'Security', result: 'Failed' })
+      throw forbidden(
+        `Too many failed attempts. This account is locked for another ${minutes} minute${minutes === 1 ? '' : 's'}.`,
+      )
+    }
+
     if (!(await verifyPassword(password, user.passwordHash))) {
-      await audit({ actorId: user.id, actorName: user.name, action: 'Failed sign-in attempt', target: email, category: 'Security', result: 'Failed' })
+      const attempts = user.failedAttempts + 1
+      const locked = attempts >= env.security.maxLoginAttempts
+
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          failedAttempts: locked ? 0 : attempts,
+          lockedUntil: locked
+            ? new Date(Date.now() + env.security.lockoutMinutes * 60_000)
+            : null,
+        },
+      })
+
+      await audit({
+        actorId: user.id,
+        actorName: user.name,
+        action: locked
+          ? `Account locked after ${env.security.maxLoginAttempts} failed attempts`
+          : 'Failed sign-in attempt',
+        target: email,
+        category: 'Security',
+        result: 'Failed',
+      })
+
+      if (locked) {
+        await notifyAdmins({
+          tone: 'danger',
+          title: 'Account locked after repeated failures',
+          detail: `${email} was locked for ${env.security.lockoutMinutes} minutes after ${env.security.maxLoginAttempts} failed sign-in attempts.`,
+          link: '/superadmin/security',
+        })
+        throw forbidden(
+          `Too many failed attempts. This account is locked for ${env.security.lockoutMinutes} minutes.`,
+        )
+      }
+
       throw genericFailure
     }
 
@@ -65,7 +119,16 @@ authRouter.post(
 
     const { token, expiresAt } = await issueSession(user, req)
 
-    await prisma.user.update({ where: { id: user.id }, data: { lastActiveAt: new Date() } })
+    // A successful sign-in clears the failure counter.
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        lastActiveAt: new Date(),
+        lastLoginAt: new Date(),
+        failedAttempts: 0,
+        lockedUntil: null,
+      },
+    })
     await audit({ actorId: user.id, actorName: user.name, action: 'Signed in', target: email, category: 'Security' })
 
     res.cookie('sd_token', token, {
@@ -165,8 +228,12 @@ authRouter.post(
         where: { id: record.userId },
         data: {
           passwordHash: await hashPassword(password),
+          passwordChangedAt: new Date(),
           // Accepting an invitation by setting a password activates the account.
           status: record.user.status === 'Invited' ? 'Active' : record.user.status,
+          // A completed reset also clears any lockout.
+          failedAttempts: 0,
+          lockedUntil: null,
         },
       }),
       prisma.passwordResetToken.update({ where: { id: record.id }, data: { usedAt: new Date() } }),
@@ -204,7 +271,7 @@ authRouter.post(
 
     await prisma.user.update({
       where: { id: user.id },
-      data: { passwordHash: await hashPassword(password) },
+      data: { passwordHash: await hashPassword(password), passwordChangedAt: new Date() },
     })
 
     // Other devices are signed out; the one making the change stays in.

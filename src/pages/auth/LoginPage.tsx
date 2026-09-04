@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button'
 import { FieldError, Input, Label } from '@/components/ui/Field'
 import { useAuth } from '@/auth/AuthContext'
 import { systemUsers } from '@/data/users'
+import { useApi } from '@/lib/useApi'
 
 const demoAccounts = systemUsers.filter((u) => u.status === 'Active').slice(0, 3)
 
@@ -18,6 +19,13 @@ export function LoginPage() {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({})
+
+  /**
+   * The demo panel lists working credentials, so whether it appears is the
+   * server's decision, not the bundle's. It is refused outright in production.
+   */
+  const { data: clientConfig } = useApi<{ showDemoAccounts: boolean }>('/client-config')
+  const showDemo = clientConfig?.showDemoAccounts ?? false
   const [formError, setFormError] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -54,6 +62,7 @@ export function LoginPage() {
       title="Sign in to the console"
       subtitle="Restaurant administrators and authorised staff only."
       footer={
+        showDemo ? (
         <div className="rounded-[10px] border border-line bg-white p-3.5">
           <p className="text-[11.5px] font-bold text-ink">Demo accounts</p>
           <ul className="mt-2 grid gap-1.5">
@@ -78,6 +87,7 @@ export function LoginPage() {
             ))}
           </ul>
         </div>
+        ) : null
       }
     >
       <form onSubmit={onSubmit} noValidate className="grid gap-4">

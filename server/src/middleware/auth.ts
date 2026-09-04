@@ -46,6 +46,18 @@ export async function loadUser(req: Request, _res: Response, next: NextFunction)
   // A suspended account loses access immediately, without waiting for expiry.
   if (session.user.status === 'Suspended') return next()
 
+  // Idle timeout, using the window the administrator set. An unattended
+  // console in a busy restaurant is a real risk, so the session is revoked
+  // rather than merely ignored — the token cannot be reused.
+  const system = await getSystem()
+  const idleMs = system.sessionTimeoutMinutes * 60_000
+  if (Date.now() - session.lastSeenAt.getTime() > idleMs) {
+    await prisma.session
+      .update({ where: { tokenId: payload.jti }, data: { revokedAt: new Date() } })
+      .catch(() => undefined)
+    return next()
+  }
+
   req.user = {
     id: session.user.id,
     name: session.user.name,
