@@ -1,0 +1,83 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Layout metrics derived from the desktop mockups */
+    --sidebar-w: 248px;
+    --sidebar-w-collapsed: 76px;
+    --page-pad-x: 24px;
+    --page-pad-y: 20px;
+  }
+
+  * {
+    @apply border-line;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-page font-sans text-ink antialiased;
+    font-feature-settings: 'liga' 1, 'calt' 1;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Native select arrow removed — every select in the mockups uses a chevron icon */
+  select {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #d9d9de;
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #c2c2c9;
+  }
+}
+
+@layer components {
+  /* Deep-maroon fill used on every primary button and the active nav pill */
+  .brand-fill {
+    background-image: linear-gradient(135deg, #8e1518 0%, #7a1113 45%, #630b0d 100%);
+  }
+  .brand-fill-bright {
+    background-image: linear-gradient(135deg, #c0161a 0%, #9d1114 100%);
+  }
+
+  /* Sidebar decorative gold motif (pagoda + waves) sits over this base */
+  .sidebar-fill {
+    background-image: linear-gradient(180deg, #101013 0%, #0b0b0d 55%, #08080a 100%);
+  }
+
+  /* Warm cream banner behind the Table Management page title */
+  .banner-cream {
+    background-image: linear-gradient(90deg, #fbf6ee 0%, #f8f2e8 60%, #f6efe3 100%);
+  }
+
+  .focus-ring {
+    @apply outline-none ring-brand-700/25 ring-offset-0 focus-visible:ring-2;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
