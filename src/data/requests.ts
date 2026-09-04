@@ -1,4 +1,4 @@
-export type RequestStatus = 'Pending' | 'In Progress' | 'Accepted' | 'Completed'
+export type RequestStatus = 'Pending' | 'In Progress' | 'Accepted' | 'Completed' | 'Rejected'
 
 export interface SpecialRequest {
   id: string

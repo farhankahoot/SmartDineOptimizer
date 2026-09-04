@@ -27,6 +27,7 @@ import { ReservationFormModal } from '@/components/reservation/ReservationFormMo
 import { useReservations } from '@/store/ReservationsContext'
 import { useAuth } from '@/auth/AuthContext'
 import { historyStatuses } from '@/data/reservations'
+import { formatBookingDateLong } from '@/lib/date'
 
 /** Module 2 FE-2/FE-4/FE-5 — full record for a single booking. */
 export function ReservationDetailPage() {
@@ -105,7 +106,7 @@ export function ReservationDetailPage() {
               <dl className="mt-5 grid gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
                 <Detail icon={<Phone />} label="Phone" value={reservation.phone} />
                 <Detail icon={<Mail />} label="Email" value={reservation.email} />
-                <Detail icon={<CalendarDays />} label="Date" value={reservation.date} />
+                <Detail icon={<CalendarDays />} label="Date" value={formatBookingDateLong(reservation.date)} />
                 <Detail icon={<Clock />} label="Time slot" value={reservation.timeSlot} />
                 <Detail icon={<Users />} label="Guests" value={`${reservation.guests} guests`} />
                 <Detail icon={<TableIcon />} label="Selected table" value={reservation.table} />

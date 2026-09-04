@@ -30,14 +30,43 @@ import {
   weeklySalesTrend,
 } from '@/data/prediction'
 
+/**
+ * Every chart takes its series as an optional prop. The seeded fixtures stay as
+ * defaults so a chart still renders if a forecast kind has not been generated.
+ */
+export interface RevenuePoint {
+  t: string
+  predicted: number
+  actual: number
+}
+export interface DayPoint {
+  day: string
+  value: number
+  highlight?: boolean
+}
+export interface FootfallPoint {
+  t: string
+  v: number
+}
+export interface DemandPoint {
+  item: string
+  value: number
+}
+export interface ShiftPoint {
+  shift: string
+  chefs: number
+  serving: number
+  cleaning: number
+}
+
 const money = (v: number) => `₨${v / 1000}k`
 
 /* ------------------------------------------- 1. Revenue and Sales Forecast */
 
-export function RevenueForecastChart() {
+export function RevenueForecastChart({ data = revenueForecast }: { data?: RevenuePoint[] }) {
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <LineChart data={revenueForecast} margin={{ top: 6, right: 6, bottom: 0, left: -14 }}>
+      <LineChart data={data} margin={{ top: 6, right: 6, bottom: 0, left: -14 }}>
         <CartesianGrid stroke={chart.grid} vertical={false} />
         <XAxis
           dataKey="t"
@@ -79,10 +108,10 @@ export function RevenueForecastChart() {
   )
 }
 
-export function DailySalesChart() {
+export function DailySalesChart({ data = dailySalesForecast }: { data?: DayPoint[] }) {
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={dailySalesForecast} margin={{ top: 6, right: 6, bottom: 0, left: -14 }} barCategoryGap="34%">
+      <BarChart data={data} margin={{ top: 6, right: 6, bottom: 0, left: -14 }} barCategoryGap="34%">
         <CartesianGrid stroke={chart.grid} vertical={false} />
         <XAxis dataKey="day" tick={axisTick} tickLine={false} axisLine={{ stroke: chart.grid }} />
         <YAxis
@@ -96,7 +125,7 @@ export function DailySalesChart() {
         />
         <Tooltip {...tooltipStyle} formatter={(v: number) => `₨${v.toLocaleString()}`} cursor={{ fill: '#F6F4F2' }} />
         <Bar dataKey="value" name="Forecast" radius={[2, 2, 0, 0]}>
-          {dailySalesForecast.map((d) => (
+          {data.map((d) => (
             <Cell key={d.day} fill={d.highlight ? chart.gold : chart.maroon} />
           ))}
         </Bar>
@@ -105,10 +134,10 @@ export function DailySalesChart() {
   )
 }
 
-export function WeeklyTrendChart() {
+export function WeeklyTrendChart({ data = weeklySalesTrend }: { data?: DayPoint[] }) {
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <AreaChart data={weeklySalesTrend} margin={{ top: 6, right: 6, bottom: 0, left: -14 }}>
+      <AreaChart data={data} margin={{ top: 6, right: 6, bottom: 0, left: -14 }}>
         <defs>
           <linearGradient id="weekly-fill" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={chart.areaTop} />
@@ -195,10 +224,10 @@ export function PredictedVsActualDonut() {
 
 /* ------------------------------------------- 2. Footfall and Peak Hours */
 
-export function FootfallChart() {
+export function FootfallChart({ data = footfallByTimeSlot }: { data?: FootfallPoint[] }) {
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={footfallByTimeSlot} margin={{ top: 6, right: 6, bottom: 0, left: -18 }} barCategoryGap="16%">
+      <BarChart data={data} margin={{ top: 6, right: 6, bottom: 0, left: -18 }} barCategoryGap="16%">
         <CartesianGrid stroke={chart.grid} vertical={false} />
         <XAxis
           dataKey="t"
@@ -271,10 +300,10 @@ function heatColor(v: number) {
   return `rgb(${c[0]}, ${c[1]}, ${c[2]})`
 }
 
-export function ExpectedGuestsChart() {
+export function ExpectedGuestsChart({ data = expectedGuestsByDay }: { data?: DayPoint[] }) {
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={expectedGuestsByDay} margin={{ top: 6, right: 6, bottom: 0, left: -18 }} barCategoryGap="38%">
+      <BarChart data={data} margin={{ top: 6, right: 6, bottom: 0, left: -18 }} barCategoryGap="38%">
         <CartesianGrid stroke={chart.grid} vertical={false} />
         <XAxis dataKey="day" tick={axisTick} tickLine={false} axisLine={{ stroke: chart.grid }} />
         <YAxis
@@ -287,7 +316,7 @@ export function ExpectedGuestsChart() {
         />
         <Tooltip {...tooltipStyle} cursor={{ fill: '#F6F4F2' }} />
         <Bar dataKey="value" name="Guests" radius={[2, 2, 0, 0]}>
-          {expectedGuestsByDay.map((d) => (
+          {data.map((d) => (
             <Cell key={d.day} fill={d.highlight ? chart.gold : chart.maroon} />
           ))}
         </Bar>
@@ -298,11 +327,11 @@ export function ExpectedGuestsChart() {
 
 /* ------------------------------------------- 3. Food Management Prediction */
 
-export function FoodDemandChart() {
+export function FoodDemandChart({ data = predictedFoodDemand }: { data?: DemandPoint[] }) {
   return (
     <ResponsiveContainer width="100%" height="100%">
       <BarChart
-        data={predictedFoodDemand}
+        data={data}
         layout="vertical"
         margin={{ top: 2, right: 10, bottom: 2, left: 6 }}
         barCategoryGap="26%"
@@ -386,10 +415,10 @@ export function RiskMeter({
 
 /* ------------------------------------------- 4. Employee Requirement */
 
-export function StaffShiftChart() {
+export function StaffShiftChart({ data = staffByShift }: { data?: ShiftPoint[] }) {
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={staffByShift} margin={{ top: 6, right: 6, bottom: 0, left: -22 }} barCategoryGap="42%">
+      <BarChart data={data} margin={{ top: 6, right: 6, bottom: 0, left: -22 }} barCategoryGap="42%">
         <CartesianGrid stroke={chart.grid} vertical={false} />
         <XAxis
           dataKey="shift"

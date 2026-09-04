@@ -13,9 +13,13 @@ import './index.css'
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
+      {/*
+        Order matters: system switches gate sign-in, and every data store
+        reloads when the signed-in user changes, so auth sits above them.
+      */}
       <SystemProvider>
-        <UsersProvider>
-          <AuthProvider>
+        <AuthProvider>
+          <UsersProvider>
             <ReservationsProvider>
               <PlatformProvider>
                 <ToastProvider>
@@ -23,8 +27,8 @@ createRoot(document.getElementById('root')!).render(
                 </ToastProvider>
               </PlatformProvider>
             </ReservationsProvider>
-          </AuthProvider>
-        </UsersProvider>
+          </UsersProvider>
+        </AuthProvider>
       </SystemProvider>
     </BrowserRouter>
   </StrictMode>,

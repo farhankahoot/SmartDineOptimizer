@@ -25,7 +25,12 @@ import { useUsers } from '@/store/UsersContext'
 import { usePlatform } from '@/store/PlatformContext'
 import { useSystem } from '@/store/SystemContext'
 import { useReservations } from '@/store/ReservationsContext'
-import { healthChecks } from '@/data/platform'
+import type { HealthState } from '@/data/platform'
+import { useApi } from '@/lib/useApi'
+
+interface HealthPayload {
+  checks: { id: string; name: string; state: HealthState; detail: string }[]
+}
 import { roleLabels } from '@/data/users'
 
 const toneStyles = {
@@ -56,6 +61,9 @@ export function SuperOverviewPage() {
 
   const pendingReservations = reservations.filter((r) => r.status === 'Pending').length
   const disabledFlags = flags.filter((f) => !f.enabled)
+  // Component states come from the server's own probes, not a fixed list.
+  const { data: health } = useApi<HealthPayload>('/platform/health')
+  const healthChecks = health?.checks ?? []
   const degraded = healthChecks.filter((h) => h.state !== 'Operational')
 
   const restrictions = [

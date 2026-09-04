@@ -17,18 +17,40 @@ import {
 import { axisTick, chart, tooltipStyle } from './chartTheme'
 import { footfallToday, reservationMix, revenueTrend } from '@/data/dashboard'
 
+/**
+ * The charts take their series as props so the dashboard can pass live figures
+ * from the API. The fixtures remain as defaults, which keeps the components
+ * renderable in isolation.
+ */
+export interface FootfallPoint {
+  slot: string
+  guests: number
+}
+export interface RevenuePoint {
+  day: string
+  actual: number | null
+  forecast: number
+}
+export interface MixSlice {
+  name: string
+  value: number
+  color: string
+}
+
 /** Module 6 FE-2 — footfall by time slot. */
-export function FootfallTodayChart() {
+export function FootfallTodayChart({ data = footfallToday }: { data?: FootfallPoint[] }) {
+  // The busiest slot is highlighted, so the threshold follows the data.
+  const peak = data.reduce((max, d) => Math.max(max, d.guests), 0)
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={footfallToday} margin={{ top: 6, right: 6, bottom: 0, left: -20 }} barCategoryGap="30%">
+      <BarChart data={data} margin={{ top: 6, right: 6, bottom: 0, left: -20 }} barCategoryGap="30%">
         <CartesianGrid stroke={chart.grid} vertical={false} />
         <XAxis dataKey="slot" tick={axisTick} tickLine={false} axisLine={{ stroke: chart.grid }} />
         <YAxis tick={axisTick} tickLine={false} axisLine={false} width={38} />
         <Tooltip {...tooltipStyle} cursor={{ fill: '#F6F4F2' }} formatter={(v: number) => `${v} guests`} />
         <Bar dataKey="guests" name="Guests" radius={[2, 2, 0, 0]}>
-          {footfallToday.map((d) => (
-            <Cell key={d.slot} fill={d.guests >= 84 ? chart.gold : chart.maroon} />
+          {data.map((d) => (
+            <Cell key={d.slot} fill={peak > 0 && d.guests === peak ? chart.gold : chart.maroon} />
           ))}
         </Bar>
       </BarChart>
@@ -37,10 +59,10 @@ export function FootfallTodayChart() {
 }
 
 /** Module 6 FE-3 — revenue trend with the forecast overlay. */
-export function RevenueTrendChart() {
+export function RevenueTrendChart({ data = revenueTrend }: { data?: RevenuePoint[] }) {
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <AreaChart data={revenueTrend} margin={{ top: 6, right: 6, bottom: 0, left: -6 }}>
+      <AreaChart data={data} margin={{ top: 6, right: 6, bottom: 0, left: -6 }}>
         <defs>
           <linearGradient id="dash-rev" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={chart.areaTop} />
@@ -91,15 +113,15 @@ export function RevenueTrendChart() {
 }
 
 /** Module 6 FE-1 — reservation status mix. */
-export function ReservationMixChart() {
-  const total = reservationMix.reduce((s, d) => s + d.value, 0)
+export function ReservationMixChart({ data = reservationMix }: { data?: MixSlice[] }) {
+  const total = data.reduce((s, d) => s + d.value, 0)
   return (
     <div className="flex items-center gap-4">
       <div className="relative size-[132px] shrink-0">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
-              data={reservationMix}
+              data={data}
               dataKey="value"
               innerRadius={42}
               outerRadius={64}
@@ -108,7 +130,7 @@ export function ReservationMixChart() {
               stroke="none"
               isAnimationActive={false}
             >
-              {reservationMix.map((d) => (
+              {data.map((d) => (
                 <Cell key={d.name} fill={d.color} />
               ))}
             </Pie>
@@ -124,13 +146,13 @@ export function ReservationMixChart() {
       </div>
 
       <ul className="min-w-0 flex-1 space-y-2">
-        {reservationMix.map((d) => (
+        {data.map((d) => (
           <li key={d.name} className="flex items-center gap-2 text-[11.5px]">
             <span className="size-[9px] shrink-0 rounded-full" style={{ background: d.color }} />
             <span className="flex-1 truncate text-ink-soft">{d.name}</span>
             <span className="font-bold text-ink">{d.value}</span>
             <span className="w-[38px] text-right text-ink-faint">
-              {Math.round((d.value / total) * 100)}%
+              {total > 0 ? Math.round((d.value / total) * 100) : 0}%
             </span>
           </li>
         ))}

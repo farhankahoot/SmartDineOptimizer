@@ -1,7 +1,8 @@
 # SmartDine Optimizer — Asian Wok
 
-Frontend for the **plug-and-play restaurant reservation and ML-based predictive
-operations management system** described in the project proposal.
+A **plug-and-play restaurant reservation and ML-based predictive operations
+management system**: a React front end and an Express + Prisma API, covering the
+eight modules in the project proposal.
 
 Two sources drive this codebase:
 
@@ -12,15 +13,32 @@ Two sources drive this codebase:
 
 ## Running it
 
+First run — installs both packages, creates the SQLite database and seeds it:
+
 ```bash
-npm install
+npm run setup
 ```
+
+Then start the API and the web app together:
 
 ```bash
 npm run dev
 ```
 
-`npm run build` produces a production bundle, `npm run lint` type-checks.
+- Web app — http://localhost:5199
+- API — http://localhost:4000/api
+
+`npm run build` produces a production bundle. `npm run lint` type-checks the
+client and the server. `npm run db:reset` drops the database and re-seeds it,
+which is the quickest way back to a known demo state.
+
+The client points at `http://localhost:4000/api` by default; set `VITE_API_URL`
+to change it. Server configuration lives in `server/.env` (copy
+`server/.env.example`), which is gitignored because it holds the JWT secret.
+
+> The API reads `API_PORT`, not `PORT`. When both servers start together the
+> tooling sets `PORT` for Vite, and an API honouring it would bind to the web
+> server's port.
 
 ### Demo accounts
 
@@ -30,6 +48,11 @@ npm run dev
 | Administrator | `admin@asianwok.pk` | `admin123` | The restaurant console |
 | Manager | `manager@asianwok.pk` | `manager123` | All modules, read-only settings |
 | Staff | `floor@asianwok.pk` | `staff123` | Reservations, tables, slots, deals, staff, communication |
+
+Passwords are bcrypt-hashed in the database; these are seed values for local
+development only. Sign-in issues a JWT bound to a `Session` row, so blocking an
+account or revoking a session takes effect on the next request rather than at
+token expiry.
 
 ## Routes
 
@@ -169,53 +192,109 @@ red `#C0161A`, gold `#D4A537`, sidebar `#0C0C0E`, page `#F8F6F3`. Layout metrics
 are CSS variables in [`src/index.css`](src/index.css). Type is **Figtree**, the
 closest widely available match to the sans used in the mockups.
 
-## Replacing the mock data
+## Backend
 
-Screens read from `src/data/*.ts`; live booking state flows through
-`ReservationsContext`. To wire a real backend, replace the module-level exports
-with data from your fetch layer and swap the context's `create` / `setStatus` /
-`update` for API calls — no component changes are needed, because components
-only depend on the exported types.
+`server/` is an Express + TypeScript API using Prisma. It is the single source
+of truth: the client holds no business rules, and every permission the console
+hides is re-checked on the server.
 
-## Backend dependencies
+```
+server/
+  prisma/schema.prisma   19 models covering all eight proposal modules
+  prisma/seed.ts         seeds from the same src/data fixtures the UI shipped
+  src/index.ts           app wiring, CORS, error handling
+  src/lib/               auth, permissions, reservations, settings, mail, audit
+  src/middleware/        session loading, permission gates, read-only guard
+  src/routes/            one router per module
+```
 
-These need a server before they do anything real:
+### Database
 
-- **Authentication** — passwords are compared client-side against
-  `src/data/users.ts`. Replace `AuthContext.signIn` with a real session endpoint.
-- **Notifications** — email (SMTP), SMS and WhatsApp sends are queued into a
-  toast only. Settings › Notifications marks SMS and WhatsApp as needing API keys.
-- **Prediction models** — the footfall, revenue, food and staffing forecasts are
-  fixtures. Settings › Prediction & Dashboard exposes the model, training window
-  and threshold inputs the Python service would consume.
-- **Reports export** — PDF/CSV/XLSX buttons add an entry to the report library;
-  actual file generation is server-side.
-- **Persistence** — reservations, tables, slots, deals, staff, user accounts,
-  showcase restaurants, feature flags, CMS copy and the audit log live in React
-  state, so a full page reload resets them to the seed data. Only the
-  system-control switches persist (via `localStorage`).
-- **Media storage** — uploaded restaurant covers are held as data URLs in
-  memory. Wire `POST /admin/media` and store the returned URL instead.
-- **Platform endpoints** — every control names the endpoint it would call, e.g.
-  `PATCH /admin/users/:id/status`, `DELETE /admin/restaurants/:id`,
-  `PATCH /admin/feature-flags/:id`, `POST /admin/system/maintenance`,
-  `DELETE /admin/sessions/:id`, `GET /health/*`.
-- **Authorisation** — the client hides what a role cannot reach, but a server
-  must re-check every permission. Client-side gating is not authorisation.
+SQLite by default, so the project runs with no external service. The proposal
+names MySQL 8, and switching is a two-line change — set `provider = "mysql"` in
+`schema.prisma`, point `DATABASE_URL` at the server, then `npm run db:push`. No
+model uses a SQLite-only feature.
+
+Double-booking is prevented by the database itself rather than by application
+code, via a unique index on `(tableCode, date, timeSlot, activeHold)`. Live
+bookings carry `activeHold = "held"`; cancelled, rejected and completed ones set
+it to `NULL`, which releases the table (Module 3 FE-5).
+
+Money is stored as integer paisa, never a float.
+
+### API surface
+
+| Area | Routes |
+| --- | --- |
+| Auth | `POST /auth/login`, `/logout`, `/forgot-password`, `/reset-password`, `/change-password`; `GET /auth/me`, `/auth/sessions` |
+| Public (Module 1) | `GET /public/config`, `/public/availability`, `/public/reservations/:ref`, `/public/showcase`; `POST /public/reservations`, `/public/reservations/:ref/cancel`, `/public/showcase/submit` |
+| Reservations (Module 2) | `GET /reservations`, `/stats`, `/upcoming`, `/:id`; `POST /`, `/:id/status`, `/bulk-status`, `/:id/resend`; `PATCH /:id` |
+| Tables (Module 3) | `GET /tables`, `/stats`, `/availability`; `POST /`; `PATCH /:id`, `/:id/position`; `DELETE /:id` |
+| Time slots (Module 3) | `GET /time-slots`; `POST /`; `PATCH /:id`; `DELETE /:id` |
+| Deals (Module 4) | `GET /deals`, `/stats`, `/performance`; `POST /`; `PATCH /:id`; `DELETE /:id` |
+| Special requests (Module 4) | `GET /special-requests`, `/alerts`; `PATCH /:id` |
+| Staff (Module 4) | `GET /staff`, `/allocation`, `/stats`; `POST /`; `PATCH /:id`; `DELETE /:id` |
+| Predictions (Module 5) | `GET /predictions`, `/summary`, `/:kind/history`; `POST /predictions/ingest` |
+| Dashboard (Module 6) | `GET /dashboard`, `/footfall`, `/peak-hours`, `/alerts` |
+| Reports (Module 6) | `GET /reports`, `/reports/export`, `/reports/history` |
+| Settings (Modules 3, 5, 7) | `GET /settings`, `/settings/data-summary`; `PUT /settings/profile`, `/hours`, `/rules`, `/prediction` |
+| Notifications (Module 8) | `GET /notifications`, `/stats`, `/activity`, `/templates`, `/settings`; `POST /send`, `/:id/resend`; `PUT /settings`; `PATCH /templates/:id` |
+| Users (Module 8) | `GET /users`, `/users/roles`; `POST /`, `/:id/status`, `/:id/invite`, `/:id/revoke-sessions`; `PATCH /:id`; `DELETE /:id` |
+| Platform | `GET/POST/PATCH/DELETE /platform/restaurants`, `/features`, `/content`, `/system`, `/audit`, `/notifications`, `/sessions`, `/health`, `/overview` |
+
+### What the numbers are computed from
+
+Nothing on a screen is a hard-coded figure any more:
+
+- **Dashboard KPIs and the revenue trend** aggregate `DailyMetric` rows.
+- **Peak-hour load** is live bookings against the smaller of table capacity and
+  the slot's `maxReservations`.
+- **Operational alerts** are derived conditions — a slot crossing 70% or 90%,
+  a blocked table, requests awaiting approval — not a fixed list.
+- **Reports** aggregate the daily series, so weekly and monthly totals always
+  reconcile with the daily rows they came from.
+- **Staff allocation** divides guests held per shift by the guests-per-chef and
+  guests-per-server ratios set in Settings.
+- **Deal performance** counts bookings whose *occasion* matches each deal. A
+  booking does not record which deal a guest chose, so "how often was this deal
+  selected" is not answerable from the data, and the screen says so instead of
+  inventing it.
+
+## Still outstanding
+
+- **Prediction models.** Module 5 FE-7 — storing and serving forecasts — is
+  implemented: `PredictionOutput` holds them and `POST /predictions/ingest` is
+  the contract a training service writes to. The models themselves are not
+  trained; seeded rows are marked `model: "seed"` and the Prediction screen
+  shows an amber banner saying the figures are reference data, not a forecast.
+- **SMS and WhatsApp.** No gateway credentials exist, so those channels are
+  logged, never sent. Email sends for real once SMTP is set in `server/.env`;
+  until then messages are written to `NotificationLog` with delivery `Pending`
+  and printed to the server console, and the Communication screen says so.
+- **Media storage.** Uploaded showcase covers are stored inline in the database
+  as data URLs. Move them to object storage before launch.
+- **PDF export.** CSV is generated server-side. PDF uses the browser's own
+  print-to-PDF against a print stylesheet; there is no server-side renderer.
 
 ## Implementation notes
 
 - **Table widths.** The admin tables carry 7–11 columns. They fill the viewport
   from roughly 1700px and scroll horizontally below that rather than shrinking
   text past legibility. Collapsing the sidebar (the ≡ button) buys back ~170px.
-- **Table Management KPIs** are computed from the live floor plan, so adding or
-  deleting a table moves the numbers. The mockup's static 28/11/12/5 figures are
-  therefore replaced by real counts of the 8 tables it draws.
+- **The floor plan shows all 28 tables.** The Table Management mockup drew eight
+  tables while its own KPI row read "28". The database holds all 28, grouped
+  into section bands, and both the admin plan and the guest booking plan render
+  those rows — so a guest can only ever pick a table that exists. Table KPIs are
+  counted server-side across every table, not just the visible filter.
 - **Floor plans** are built from CSS/SVG primitives — no image assets were
   supplied. Tables are positioned as percentages so the plan scales.
 - **Hero photography.** The guest hero in the mockup uses a restaurant photo.
   None was provided, so the background approximates its lighting. Drop a real
   image in and swap the gradient layer when the asset arrives.
+- **Guest table availability is live.** The booking plan asks the API which
+  tables are free for the chosen date and slot, and clears the selection if that
+  table stops being available. Bookable dates are generated from today against
+  the `advanceDays` rule, so the form cannot offer a date the server rejects.
 - **No payment screens.** LI-3 excludes the payment gateway from this version,
   so no billing or subscription UI exists.
 - **Currency is PKR (₨)** throughout — deals, revenue forecasts, dashboard

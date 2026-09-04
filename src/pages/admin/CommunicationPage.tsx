@@ -29,16 +29,68 @@ import { Label, Select, Textarea, Toggle } from '@/components/ui/Field'
 import { Modal } from '@/components/ui/Modal'
 import { cn } from '@/lib/cn'
 import {
-  communicationActivity,
-  communicationStats,
-  messageTemplates,
-  notificationSettings,
-  notifications,
   type DeliveryStatus,
   type MessageTemplate,
   type NotificationRow,
   type NotificationStatus,
 } from '@/data/communication'
+import { api, messageOf } from '@/lib/api'
+import { useApi } from '@/lib/useApi'
+import { useToast } from '@/components/ui/Toast'
+
+interface LogRow {
+  id: string
+  reference: string
+  customerName: string
+  phone: string
+  email: string
+  channel: string
+  type: string
+  body: string
+  delivery: DeliveryStatus
+  error: string | null
+  sentAt: string | null
+  createdAt: string
+}
+
+interface StatsPayload {
+  sentToday: number
+  confirmations: number
+  reminders: number
+  pending: number
+  successRate: number
+  /** False when no SMTP host is set, so the UI must not imply delivery. */
+  transportConfigured: boolean
+}
+
+interface ActivityPayload {
+  activity: { id: string; at: string; title: string; detail: string; tone: string }[]
+}
+
+interface TemplatePayload {
+  templates: { id: string; key: string; title: string; body: string; channel: string; active: boolean }[]
+}
+
+interface SettingsPayload {
+  settings: {
+    confirmOnApproval: boolean
+    reminderEnabled: boolean
+    reminderHoursBefore: number
+    cancellationEnabled: boolean
+    allowManualResend: boolean
+  }
+  transportConfigured: boolean
+}
+
+const templateIconFor = (channel: string) =>
+  channel === 'SMS' ? 'chat' : channel === 'WhatsApp' ? 'whatsapp' : 'mail'
+
+const SETTING_LABELS: { key: keyof SettingsPayload['settings']; title: string; detail: string }[] = [
+  { key: 'confirmOnApproval', title: 'Send confirmation after admin approval', detail: 'Automatically send confirmation once a reservation is approved.' },
+  { key: 'reminderEnabled', title: 'Send reminder before the reservation', detail: 'Send an automatic reminder ahead of the booking time.' },
+  { key: 'cancellationEnabled', title: 'Send cancellation message automatically', detail: 'Notify customers automatically when a reservation is cancelled.' },
+  { key: 'allowManualResend', title: 'Allow manual resend', detail: 'Let admins resend failed or pending notifications by hand.' },
+]
 
 const statIcons = { send: Send, mail: Mail, bell: Bell, clock: Clock, shield: ShieldCheck }
 
@@ -67,7 +119,96 @@ const channels = ['Email', 'SMS', 'WhatsApp'] as const
 
 export function CommunicationPage() {
   const { toggle } = useMobileNav()
-  const [settings, setSettings] = useState(notificationSettings)
+  const { push } = useToast()
+
+  const logQuery = useApi<{ notifications: LogRow[] }>('/notifications', { perPage: 50 })
+  const statsQuery = useApi<StatsPayload>('/notifications/stats')
+  const activityQuery = useApi<ActivityPayload>('/notifications/activity')
+  const templatesQuery = useApi<TemplatePayload>('/notifications/templates')
+  const settingsQuery = useApi<SettingsPayload>('/notifications/settings')
+
+  const live = settingsQuery.data?.settings
+  const settings = SETTING_LABELS.map((row) => ({
+    id: row.key,
+    title: row.title,
+    detail: row.detail,
+    enabled: live ? Boolean(live[row.key]) : false,
+  }))
+
+  const setSettings = async (key: keyof SettingsPayload['settings'], value: boolean) => {
+    try {
+      await api.put('/notifications/settings', { [key]: value })
+      settingsQuery.refresh()
+    } catch (err) {
+      push({ tone: 'error', title: 'Setting not saved', detail: messageOf(err) })
+    }
+  }
+
+  // The delivery log carries the reference, not the booking's own columns, so
+  // the table maps each entry onto the shape the columns expect.
+  const notifications: NotificationRow[] = (logQuery.data?.notifications ?? []).map((n) => ({
+    id: n.id,
+    customerName: n.customerName,
+    phone: n.phone || '—',
+    email: n.email,
+    date: new Date(n.createdAt).toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    }),
+    timeSlot: n.channel,
+    table: n.reference || '—',
+    status: (n.delivery === 'Failed' ? 'Pending' : 'Confirmed') as NotificationStatus,
+    type: n.type,
+    delivery: n.delivery,
+  }))
+
+  const st = statsQuery.data
+  const communicationStats = [
+    { key: 'sent', label: 'Messages Sent Today', value: String(st?.sentToday ?? 0), delta: '', trend: 'flat' as const, icon: 'send' as const },
+    { key: 'confirmations', label: 'Confirmations Sent', value: String(st?.confirmations ?? 0), delta: '', trend: 'flat' as const, icon: 'mail' as const },
+    { key: 'reminders', label: 'Reminders Scheduled', value: String(st?.reminders ?? 0), delta: '', trend: 'flat' as const, icon: 'bell' as const },
+    { key: 'pending', label: 'Pending Notifications', value: String(st?.pending ?? 0), delta: '', trend: 'flat' as const, icon: 'clock' as const },
+    { key: 'success', label: 'Delivery Success Rate', value: `${st?.successRate ?? 0}%`, delta: '', trend: 'flat' as const, icon: 'shield' as const },
+  ]
+
+  const communicationActivity = (activityQuery.data?.activity ?? []).map((a) => ({
+    id: a.id,
+    time: new Date(a.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+    title: a.title,
+    detail: a.detail,
+    tone: a.tone as 'success' | 'warn' | 'danger',
+  }))
+
+  const messageTemplates: MessageTemplate[] = (templatesQuery.data?.templates ?? []).map((t) => ({
+    id: t.id,
+    title: t.title,
+    body: t.body,
+    channel: t.channel as MessageTemplate['channel'],
+    active: t.active,
+    icon: templateIconFor(t.channel) as MessageTemplate['icon'],
+    color: t.channel === 'SMS' ? '#3A7BD5' : t.channel === 'WhatsApp' ? '#25A65B' : '#2E9E63',
+  }))
+
+  /** Retries a delivery through the server rather than only showing a notice. */
+  const resend = async (id: string) => {
+    try {
+      const result = await api.post<{ delivery: string }>(`/notifications/${id}/resend`)
+      push({
+        tone: result.delivery === 'Sent' ? 'success' : 'info',
+        title: result.delivery === 'Sent' ? 'Message sent' : `Message ${result.delivery.toLowerCase()}`,
+        detail:
+          result.delivery === 'Sent'
+            ? 'Delivered over SMTP.'
+            : 'Recorded in the log. No transport is configured, so nothing was delivered.',
+      })
+      logQuery.refresh()
+      statsQuery.refresh()
+      activityQuery.refresh()
+    } catch (err) {
+      push({ tone: 'error', title: 'Resend failed', detail: messageOf(err) })
+    }
+  }
   const [channel, setChannel] = useState<(typeof channels)[number]>('Email')
   const [message, setMessage] = useState('')
   const [reservation, setReservation] = useState('')
@@ -102,15 +243,15 @@ export function CommunicationPage() {
       render: (r) => {
         if (r.delivery === 'Failed') {
           return (
-            <Button size="xs" leftIcon={<RotateCw className="size-[11px]" />} onClick={() => setSentNotice(true)}>
+            <Button size="xs" leftIcon={<RotateCw className="size-[11px]" />} onClick={() => resend(r.id)}>
               Resend
             </Button>
           )
         }
         if (r.delivery === 'Scheduled' || r.delivery === 'Pending') {
           return (
-            <Button size="xs" leftIcon={<Send className="size-[11px]" />} onClick={() => setSentNotice(true)}>
-              Send Reminder
+            <Button size="xs" leftIcon={<Send className="size-[11px]" />} onClick={() => resend(r.id)}>
+              Send Now
             </Button>
           )
         }
@@ -136,6 +277,22 @@ export function CommunicationPage() {
       />
 
       <div className="grid gap-4 px-[var(--page-pad-x)] py-[var(--page-pad-y)]">
+        {/*
+          Without an SMTP host nothing actually leaves the machine. The counters
+          below are real, but they count log entries, not deliveries — so the
+          screen has to say that rather than implying messages reached anyone.
+        */}
+        {statsQuery.data && !statsQuery.data.transportConfigured && (
+          <div className="flex flex-wrap items-center gap-2 rounded-[10px] border border-gold-600/40 bg-[#FDF8EC] px-3.5 py-2.5 text-[11.5px] text-gold-700">
+            <AlertTriangle className="size-[14px] shrink-0" strokeWidth={2.2} />
+            <span>
+              <b>No mail transport configured.</b> Messages are composed and recorded in the log
+              below, but nothing is delivered until SMTP credentials are set on the server. SMS and
+              WhatsApp need a gateway before they can send at all.
+            </span>
+          </div>
+        )}
+
         <section className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           {communicationStats.map((s) => {
             const Icon = statIcons[s.icon]
@@ -304,9 +461,31 @@ export function CommunicationPage() {
                     block
                     size="lg"
                     leftIcon={<Send className="size-[16px]" />}
-                    onClick={() => {
-                      setSentNotice(true)
-                      setMessage('')
+                    onClick={async () => {
+                      if (!reservation.trim()) {
+                        push({ tone: 'error', title: 'Enter a booking reference' })
+                        return
+                      }
+                      const template = messageTemplates.find((t) => t.id === messageType)
+                      try {
+                        await api.post('/notifications/send', {
+                          reference: reservation.trim(),
+                          type: template?.title.includes('Reminder')
+                            ? 'Reminder'
+                            : template?.title.includes('Cancel')
+                              ? 'Cancellation'
+                              : template?.title.includes('Update')
+                                ? 'Update'
+                                : 'Confirmation',
+                        })
+                        setSentNotice(true)
+                        setMessage('')
+                        logQuery.refresh()
+                        statsQuery.refresh()
+                        activityQuery.refresh()
+                      } catch (err) {
+                        push({ tone: 'error', title: 'Message not sent', detail: messageOf(err) })
+                      }
                     }}
                   >
                     Send Message
@@ -384,11 +563,7 @@ export function CommunicationPage() {
                     <Toggle
                       label={s.title}
                       checked={s.enabled}
-                      onChange={(next) =>
-                        setSettings((prev) =>
-                          prev.map((x) => (x.id === s.id ? { ...x, enabled: next } : x)),
-                        )
-                      }
+                      onChange={(next) => void setSettings(s.id, next)}
                     />
                   </li>
                 ))}

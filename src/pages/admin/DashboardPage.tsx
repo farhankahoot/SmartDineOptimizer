@@ -29,17 +29,57 @@ import {
   ReservationMixChart,
   RevenueTrendChart,
 } from '@/components/charts/DashboardCharts'
-import {
-  dashboardKpis,
-  dashboardPeriods,
-  dashboardRecommendations,
-  operationalAlerts,
-  peakHours,
-  type AlertTone,
-} from '@/data/dashboard'
+import { dashboardPeriods, type AlertTone } from '@/data/dashboard'
 import { useReservations } from '@/store/ReservationsContext'
 import { activeStatuses } from '@/data/reservations'
 import { useAuth } from '@/auth/AuthContext'
+import { useApi } from '@/lib/useApi'
+
+/* ------------------------------------------------ API response shapes */
+
+interface DashboardPayload {
+  kpis: {
+    totalReservations: number
+    totalReservationsDelta: number | null
+    confirmed: number
+    confirmedDelta: number | null
+    cancelled: number
+    cancelledDelta: number | null
+    availableTables: number
+    bookedTables: number
+    blockedTables: number
+    guestsHeld: number
+    revenue: number
+    revenueDelta: number | null
+  }
+  mix: { name: string; value: number; color: string }[]
+  revenueTrend: { day: string; date: string; actual: number; forecast: number }[]
+}
+
+interface FootfallPayload {
+  footfall: { slot: string; guests: number; reservations: number }[]
+}
+
+interface PeakPayload {
+  peakHours: {
+    slot: string
+    booked: number
+    capacity: number
+    load: number
+    tone: 'ok' | 'warn' | 'danger'
+    label: string
+  }[]
+}
+
+interface AlertsPayload {
+  alerts: { id: string; tone: AlertTone; category: string; title: string; detail: string }[]
+  recommendations: string[]
+}
+
+const nf = new Intl.NumberFormat('en-PK')
+const pct = (v: number | null) => (v === null ? undefined : `${Math.abs(v)}%`)
+const dir = (v: number | null): 'up' | 'down' | 'flat' =>
+  v === null || v === 0 ? 'flat' : v > 0 ? 'up' : 'down'
 
 const kpiIcons = [CalendarDays, CheckCircle2, XCircle, TableIcon, TableIcon]
 
@@ -67,8 +107,29 @@ export function DashboardPage() {
   const { reservations } = useReservations()
   const navigate = useNavigate()
 
-  const [period, setPeriod] = useState('Today')
+  const [period, setPeriod] = useState('Last 7 days')
   const [refreshing, setRefreshing] = useState(false)
+
+  const summary = useApi<DashboardPayload>('/dashboard', { period })
+  const footfall = useApi<FootfallPayload>('/dashboard/footfall')
+  const peaks = useApi<PeakPayload>('/dashboard/peak-hours')
+  const feed = useApi<AlertsPayload>('/dashboard/alerts')
+
+  const loading = summary.loading || refreshing
+  const kpis = summary.data?.kpis
+  const alerts = feed.data?.alerts ?? []
+  const recommendations = feed.data?.recommendations ?? []
+
+  /** Module 6 FE-1 - the five headline figures, straight from the database. */
+  const kpiCards = kpis
+    ? [
+        { key: 'total', label: 'Total Reservations', value: nf.format(kpis.totalReservations), delta: pct(kpis.totalReservationsDelta), trend: dir(kpis.totalReservationsDelta), caption: `in ${period.toLowerCase()}` },
+        { key: 'confirmed', label: 'Confirmed Bookings', value: nf.format(kpis.confirmed), delta: pct(kpis.confirmedDelta), trend: dir(kpis.confirmedDelta), caption: 'vs previous period' },
+        { key: 'cancelled', label: 'Cancelled Bookings', value: nf.format(kpis.cancelled), delta: pct(kpis.cancelledDelta), trend: dir(kpis.cancelledDelta), caption: 'vs previous period' },
+        { key: 'available', label: 'Available Tables', value: nf.format(kpis.availableTables), caption: 'right now' },
+        { key: 'booked', label: 'Booked Tables', value: nf.format(kpis.bookedTables), caption: 'right now' },
+      ]
+    : []
 
   const pendingCount = useMemo(
     () => reservations.filter((r) => r.status === 'Pending').length,
@@ -81,7 +142,12 @@ export function DashboardPage() {
 
   const refresh = async () => {
     setRefreshing(true)
-    await new Promise((r) => setTimeout(r, 900))
+    summary.refresh()
+    footfall.refresh()
+    peaks.refresh()
+    feed.refresh()
+    // Brief hold so the skeletons register rather than flashing.
+    await new Promise((r) => setTimeout(r, 400))
     setRefreshing(false)
     push({ tone: 'success', title: 'Dashboard refreshed', detail: 'Showing the latest figures.' })
   }
@@ -91,7 +157,7 @@ export function DashboardPage() {
       <PageHeader
         title="Real-Time Operations Dashboard"
         underline
-        notificationCount={operationalAlerts.length}
+        notificationCount={alerts.length}
         profileName={user?.name ?? 'Admin User'}
         onToggleNav={toggle}
         action={
@@ -132,9 +198,9 @@ export function DashboardPage() {
 
         {/* Module 6 FE-1 — KPI cards */}
         <section className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-          {refreshing
-            ? dashboardKpis.map((k) => <CardSkeleton key={k.key} />)
-            : dashboardKpis.map((k, i) => {
+          {loading || kpiCards.length === 0
+            ? [0, 1, 2, 3, 4].map((k) => <CardSkeleton key={k} />)
+            : kpiCards.map((k, i) => {
                 const Icon = kpiIcons[i]
                 return (
                   <StatCard
@@ -158,9 +224,15 @@ export function DashboardPage() {
                 <SectionTitle icon={<Users className="size-[16px]" strokeWidth={2.3} />}>
                   Customer Footfall by Time Slot
                 </SectionTitle>
-                <p className="mt-1 text-[11.5px] text-ink-muted">{period} · expected guests</p>
+                <p className="mt-1 text-[11.5px] text-ink-muted">
+                  Guests held across live bookings
+                </p>
                 <div className="mt-3 h-[192px]">
-                  {refreshing ? <Skeleton className="h-full w-full" /> : <FootfallTodayChart />}
+                  {loading || footfall.loading ? (
+                    <Skeleton className="h-full w-full" />
+                  ) : (
+                    <FootfallTodayChart data={footfall.data?.footfall ?? []} />
+                  )}
                 </div>
               </Card>
 
@@ -169,10 +241,14 @@ export function DashboardPage() {
                   Revenue Trend &amp; Sales Forecast
                 </SectionTitle>
                 <p className="mt-1 text-[11.5px] text-ink-muted">
-                  Last 7 days · actual vs forecast
+                  {period} · actual vs forecast
                 </p>
                 <div className="mt-3 h-[192px]">
-                  {refreshing ? <Skeleton className="h-full w-full" /> : <RevenueTrendChart />}
+                  {loading ? (
+                    <Skeleton className="h-full w-full" />
+                  ) : (
+                    <RevenueTrendChart data={summary.data?.revenueTrend ?? []} />
+                  )}
                 </div>
               </Card>
             </div>
@@ -184,7 +260,11 @@ export function DashboardPage() {
                   Reservation Mix
                 </SectionTitle>
                 <div className="mt-4">
-                  <ReservationMixChart />
+                  {loading ? (
+                    <Skeleton className="h-[132px] w-full" />
+                  ) : (
+                    <ReservationMixChart data={summary.data?.mix ?? []} />
+                  )}
                 </div>
               </Card>
 
@@ -197,12 +277,14 @@ export function DashboardPage() {
                 </p>
 
                 <ul className="mt-3.5 grid gap-3">
-                  {peakHours.map((p) => (
+                  {(peaks.data?.peakHours ?? []).map((p) => (
                     <li key={p.slot}>
                       <div className="flex items-baseline justify-between gap-2">
                         <span className="text-[12px] font-semibold text-ink">{p.slot}</span>
                         <span className="flex items-center gap-2 text-[11px]">
-                          <span className="text-ink-muted">{p.label}</span>
+                          <span className="text-ink-muted">
+                            {p.label} · {p.booked}/{p.capacity}
+                          </span>
                           <span className="font-bold text-ink">{p.load}%</span>
                         </span>
                       </div>
@@ -235,10 +317,10 @@ export function DashboardPage() {
                 Recommendations
               </SectionTitle>
               <p className="mt-1 text-[11.5px] text-ink-muted">
-                Generated from today&apos;s reservation, food and staffing forecasts.
+                Derived from live bookings, table state and stored forecasts.
               </p>
               <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-                {dashboardRecommendations.map((r, i) => (
+                {recommendations.map((r, i) => (
                   <li
                     key={r}
                     className="flex gap-2.5 rounded-[9px] border border-line bg-[#FBF9F7] px-3 py-2.5"
@@ -258,13 +340,18 @@ export function DashboardPage() {
             <Card className="p-4">
               <SectionTitle
                 icon={<Bell className="size-[16px]" strokeWidth={2.3} />}
-                action={<Badge tone="pending">{operationalAlerts.length} new</Badge>}
+                action={<Badge tone="pending">{alerts.length} open</Badge>}
               >
                 Operational Alerts
               </SectionTitle>
 
               <ul className="mt-3 grid gap-2">
-                {operationalAlerts.map((a) => {
+                {alerts.length === 0 && !feed.loading && (
+                  <li className="rounded-[9px] border border-line px-3 py-4 text-center text-[12px] text-ink-muted">
+                    Nothing needs attention right now.
+                  </li>
+                )}
+                {alerts.map((a) => {
                   const { icon: Icon, ring, fg } = alertStyles[a.tone]
                   return (
                     <li key={a.id} className="rounded-[9px] border border-line px-3 py-2.5">
@@ -283,7 +370,7 @@ export function DashboardPage() {
                             <span className="text-[9.5px] font-bold uppercase tracking-[0.05em] text-ink-faint">
                               {a.category}
                             </span>
-                            <span className="shrink-0 text-[9.5px] text-ink-faint">{a.time}</span>
+                            <span className="shrink-0 text-[9.5px] text-ink-faint">Now</span>
                           </div>
                           <p className="mt-0.5 text-[12px] font-bold leading-snug text-ink">
                             {a.title}

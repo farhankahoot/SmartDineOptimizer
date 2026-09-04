@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import {
   Bell,
   Brain,
@@ -37,7 +37,6 @@ import {
   defaultPrediction,
   defaultProfile,
   defaultRules,
-  dataSummary,
   models,
   refreshIntervals,
   timeOptions,
@@ -45,7 +44,40 @@ import {
   trainingWindows,
   type DayHours,
 } from '@/data/settings'
-import { notificationSettings } from '@/data/communication'
+import { api, messageOf } from '@/lib/api'
+import { useApi } from '@/lib/useApi'
+
+interface SettingsPayload {
+  profile: typeof defaultProfile
+  hours: DayHours[]
+  rules: typeof defaultRules
+  prediction: typeof defaultPrediction
+}
+
+interface NotificationSettingsPayload {
+  settings: {
+    confirmOnApproval: boolean
+    reminderEnabled: boolean
+    reminderHoursBefore: number
+    cancellationEnabled: boolean
+    allowManualResend: boolean
+  }
+}
+
+interface DataSummaryPayload {
+  summary: { label: string; value: number; detail: string }[]
+}
+
+const NOTIFICATION_ROWS: {
+  key: keyof NotificationSettingsPayload['settings']
+  title: string
+  detail: string
+}[] = [
+  { key: 'confirmOnApproval', title: 'Send confirmation after admin approval', detail: 'Automatically send confirmation once a reservation is approved.' },
+  { key: 'reminderEnabled', title: 'Send reminder before the reservation', detail: 'Send an automatic reminder ahead of the booking time.' },
+  { key: 'cancellationEnabled', title: 'Send cancellation message automatically', detail: 'Notify customers automatically when a reservation is cancelled.' },
+  { key: 'allowManualResend', title: 'Allow manual resend', detail: 'Let admins resend failed or pending notifications by hand.' },
+]
 import { roleLabels, rolePermissions, type Role, type SystemUser, type UserStatus } from '@/data/users'
 import { useUsers } from '@/store/UsersContext'
 import { SystemControlPanel } from './settings/SystemControlPanel'
@@ -79,11 +111,49 @@ export function SettingsPage() {
   const [tab, setTab] = useState('profile')
   const [saving, setSaving] = useState(false)
 
+  // Settings load from the server; the declared defaults are only the shape
+  // used before the first response arrives.
+  const settingsQuery = useApi<SettingsPayload>('/settings')
+  const notifyQuery = useApi<NotificationSettingsPayload>('/notifications/settings')
+  const summaryQuery = useApi<DataSummaryPayload>('/settings/data-summary')
+
   const [profile, setProfile] = useState(defaultProfile)
   const [hours, setHours] = useState<DayHours[]>(defaultHours)
   const [rules, setRules] = useState(defaultRules)
   const [prediction, setPrediction] = useState(defaultPrediction)
-  const [notifications, setNotifications] = useState(notificationSettings)
+
+  useEffect(() => {
+    const loaded = settingsQuery.data
+    if (!loaded) return
+    setProfile(loaded.profile)
+    setHours(loaded.hours)
+    setRules(loaded.rules)
+    setPrediction(loaded.prediction)
+  }, [settingsQuery.data])
+
+  const liveNotify = notifyQuery.data?.settings
+  const notifications = NOTIFICATION_ROWS.map((row) => ({
+    id: row.key,
+    title: row.title,
+    detail: row.detail,
+    enabled: liveNotify ? Boolean(liveNotify[row.key]) : false,
+  }))
+
+  const setNotifications = async (key: string, value: boolean) => {
+    try {
+      await api.put('/notifications/settings', { [key]: value })
+      notifyQuery.refresh()
+    } catch (err) {
+      push({ tone: 'error', title: 'Setting not saved', detail: messageOf(err) })
+    }
+  }
+
+  /** Module 7 — counted from the live database, not a fixed table. */
+  const dataSummary = (summaryQuery.data?.summary ?? []).map((d) => ({
+    label: d.label,
+    value: d.value.toLocaleString('en-PK'),
+    detail: d.detail,
+  }))
   const { users, invite: inviteUser, setRole, setStatus: setUserStatus, remove: removeUser } = useUsers()
 
   const [inviteOpen, setInviteOpen] = useState(false)
@@ -91,11 +161,22 @@ export function SettingsPage() {
   const [inviteErrors, setInviteErrors] = useState<{ name?: string; email?: string }>({})
   const [removingUser, setRemovingUser] = useState<SystemUser | null>(null)
 
+  /** Each tab persists to its own endpoint so a partial save cannot clobber. */
   const save = async (label: string) => {
     setSaving(true)
-    await new Promise((r) => setTimeout(r, 700))
-    setSaving(false)
-    push({ tone: 'success', title: `${label} saved`, detail: 'Your changes are live.' })
+    try {
+      if (label.startsWith('Restaurant')) await api.put('/settings/profile', profile)
+      else if (label.startsWith('Operating')) await api.put('/settings/hours', { hours })
+      else if (label.startsWith('Reservation')) await api.put('/settings/rules', rules)
+      else if (label.startsWith('Prediction')) await api.put('/settings/prediction', prediction)
+
+      settingsQuery.refresh()
+      push({ tone: 'success', title: `${label} saved`, detail: 'Your changes are live.' })
+    } catch (err) {
+      push({ tone: 'error', title: `${label} not saved`, detail: messageOf(err) })
+    } finally {
+      setSaving(false)
+    }
   }
 
   const sendInvite = (e: FormEvent) => {
@@ -110,10 +191,24 @@ export function SettingsPage() {
     setInviteErrors(next)
     if (Object.keys(next).length) return
 
-    inviteUser({ name: invite.name.trim(), email: invite.email.trim(), role: invite.role })
-    push({ tone: 'success', title: 'Invitation sent', detail: invite.email.trim() })
-    setInvite({ name: '', email: '', role: 'staff' })
-    setInviteOpen(false)
+    void (async () => {
+      try {
+        await inviteUser({
+          name: invite.name.trim(),
+          email: invite.email.trim(),
+          role: invite.role,
+        })
+        push({
+          tone: 'success',
+          title: 'Invitation sent',
+          detail: `${invite.email.trim()} can set a password from the reset screen.`,
+        })
+        setInvite({ name: '', email: '', role: 'staff' })
+        setInviteOpen(false)
+      } catch (err) {
+        setInviteErrors({ email: messageOf(err) })
+      }
+    })()
   }
 
   const userColumns: Column<SystemUser>[] = [
@@ -456,12 +551,9 @@ export function SettingsPage() {
                       <Toggle
                         label={s.title}
                         checked={s.enabled}
-                        onChange={(v) =>
-                          canManage &&
-                          setNotifications((prev) =>
-                            prev.map((x) => (x.id === s.id ? { ...x, enabled: v } : x)),
-                          )
-                        }
+                        onChange={(v) => {
+                          if (canManage) void setNotifications(s.id, v)
+                        }}
                       />
                     </li>
                   ))}

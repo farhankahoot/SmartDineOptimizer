@@ -1,0 +1,337 @@
+// SmartDine Optimizer — data model for the eight modules in the proposal.
+//
+// Provider is SQLite for local development. Switching to MySQL 8 (the stack the
+// proposal names) is a two-line change: set provider = "mysql" and point
+// DATABASE_URL at the server. No model below uses a SQLite-only feature.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------------------------------------------------ Module 8
+// User access, roles and sessions.
+
+model User {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  phone        String    @default("—")
+  passwordHash String
+  role         String // superadmin | admin | manager | staff
+  status       String    @default("Invited") // Active | Invited | Suspended
+  lastActiveAt DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  sessions     Session[]
+  auditEntries AuditEntry[]
+  resetTokens  PasswordResetToken[]
+
+  @@index([role])
+  @@index([status])
+}
+
+model Session {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenId   String    @unique // jti claim, so a single session can be revoked
+  device    String    @default("Unknown device")
+  location  String    @default("—")
+  startedAt DateTime  @default(now())
+  lastSeenAt DateTime @default(now())
+  revokedAt DateTime?
+  expiresAt DateTime
+
+  @@index([userId])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+// ------------------------------------------------------------- Modules 1 & 2
+// Customer reservations and admin reservation management.
+
+model Reservation {
+  id             String   @id @default(cuid())
+  reference      String   @unique // RES-2025-0001, used by the public tracker
+  customerName   String
+  phone          String
+  email          String
+  date           String // "May 22, 2025" — kept as the display string the UI uses
+  timeSlot       String
+  guests         Int
+  occasion       String
+  seating        String   @default("No preference")
+  tableCode      String
+  specialRequest String   @default("")
+  source         String   @default("Website Booking")
+  status         String   @default("Pending") // Pending|Confirmed|Updated|Rejected|Cancelled|Completed
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  events          ReservationEvent[]
+  specialRequests SpecialRequest[]
+
+  // Module 3 FE-5 — the database itself refuses a second live booking for the
+  // same table, date and slot. Cleared rows use a sentinel so cancelled and
+  // rejected bookings release the table.
+  activeHold String?
+
+  @@unique([tableCode, date, timeSlot, activeHold], name: "no_double_booking")
+  @@index([status])
+  @@index([date])
+  @@index([email])
+}
+
+model ReservationEvent {
+  id            String      @id @default(cuid())
+  reservationId String
+  reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  status        String // Submitted | Pending | Confirmed | Updated | Rejected | Cancelled | Completed
+  note          String      @default("")
+  actorName     String      @default("Customer")
+  at            DateTime    @default(now())
+
+  @@index([reservationId])
+}
+
+// ------------------------------------------------------------------ Module 3
+// Tables and time slots.
+
+model RestaurantTable {
+  id        String   @id @default(cuid())
+  code      String   @unique // A01, B12 …
+  seats     Int
+  type      String // Couple | Family | Group | Private
+  section   String // Main Hall | Window Side | Outdoor Terrace | Private Room
+  shape     String   @default("rect") // round | rect | square
+  status    String   @default("Available") // Available|Reserved|Booked|Occupied|Blocked|Unavailable
+  // Floor-plan placement, percentages of the plan canvas.
+  x         Float    @default(12)
+  y         Float    @default(21)
+  w         Float    @default(12)
+  h         Float    @default(30)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([section])
+}
+
+model TimeSlot {
+  id              String   @id @default(cuid())
+  label           String // "6:00 PM – 8:00 PM"
+  startTime       String
+  endTime         String
+  maxReservations Int      @default(28)
+  mealPeriod      String   @default("Dinner") // Lunch | Dinner | Late Night | Peak Hours | Special Occasion
+  status          String   @default("Open") // Open|Full|Almost Full|Closed|Blocked
+  dayOfWeek       String   @default("All")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([startTime, endTime, dayOfWeek])
+  @@index([status])
+}
+
+// ------------------------------------------------------------------ Module 4
+// Food deals, customer special requests and staff records.
+
+model Deal {
+  id         String   @id @default(cuid())
+  name       String   @unique
+  category   String
+  occasion   String
+  priceMinor Int // paisa, so money is never a float
+  items      String
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([active])
+}
+
+model SpecialRequest {
+  id            String       @id @default(cuid())
+  reservationId String?
+  reservation   Reservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+  reference     String
+  customerName  String
+  date          String
+  timeSlot      String
+  tableCode     String
+  occasion      String
+  request       String
+  status        String       @default("Pending") // Pending | In Progress | Accepted | Completed
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([status])
+}
+
+model StaffMember {
+  id           String   @id @default(cuid())
+  code         String   @unique // ST-01
+  name         String
+  role         String // Chef | Serving Staff | Cleaning Staff | Service Staff
+  phone        String
+  shift        String // Morning | Evening | Night
+  availability String   @default("Available") // Available | On Shift | Off Duty | On Leave
+  joinedOn     String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([role])
+  @@index([shift])
+}
+
+// ------------------------------------------------------------- Modules 5 & 6
+// Prediction outputs and the historical series the dashboard and reports read.
+//
+// Module 5 FE-7 requires prediction outputs to be stored for dashboard
+// visualisation and reporting. The rows live here; the Python service that
+// trains the models writes to this table later without any API change.
+
+model PredictionOutput {
+  id          String   @id @default(cuid())
+  kind        String // footfall | revenue | food-demand | staffing | peak-hour | sales-forecast
+  scopeDate   String // the day the prediction is for
+  payload     String // JSON blob shaped for the dashboard
+  model       String   @default("seed")
+  confidence  Float?
+  generatedAt DateTime @default(now())
+
+  @@unique([kind, scopeDate])
+  @@index([kind])
+}
+
+/// One row per trading day — the source series behind the dashboard and reports.
+model DailyMetric {
+  id                  String   @id @default(cuid())
+  date                String   @unique
+  reservations        Int      @default(0)
+  guests              Int      @default(0)
+  confirmed           Int      @default(0)
+  cancelled           Int      @default(0)
+  revenueMinor        Int      @default(0)
+  forecastRevenueMinor Int     @default(0)
+  wastagePct          Float    @default(0)
+  staffRequired       Int      @default(0)
+  createdAt           DateTime @default(now())
+
+  @@index([date])
+}
+
+// ------------------------------------------------------------------ Module 8
+// Notification templates and the delivery log.
+
+model MessageTemplate {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  title     String
+  body      String
+  channel   String // Email | SMS | WhatsApp
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model NotificationLog {
+  id           String    @id @default(cuid())
+  reference    String    @default("")
+  customerName String
+  phone        String    @default("")
+  email        String    @default("")
+  channel      String // Email | SMS | WhatsApp
+  type         String // Confirmation | Reminder | Update | Cancellation | Special Request
+  body         String    @default("")
+  delivery     String    @default("Pending") // Sent | Scheduled | Pending | Failed
+  error        String?
+  sentAt       DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([delivery])
+}
+
+// ------------------------------------------------- Platform / control centre
+
+model ShowcaseRestaurant {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  city        String
+  province    String
+  cuisine     String
+  description String
+  imageUrl    String?
+  coverFrom   String   @default("#7A1113")
+  coverTo     String   @default("#2A1410")
+  website     String?
+  featured    Boolean  @default(false)
+  status      String   @default("Pending") // Active|Pending|Suspended|Inactive|Rejected
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status])
+  @@index([sortOrder])
+}
+
+model FeatureFlag {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  name        String
+  description String
+  area        String // Public | Console | Analytics | Messaging
+  enabled     Boolean  @default(true)
+  endpoint    String   @default("")
+  updatedAt   DateTime @updatedAt
+}
+
+/// Key/value store for system switches and landing-page content.
+model Setting {
+  key       String   @id
+  value     String // JSON
+  updatedAt DateTime @updatedAt
+}
+
+model AuditEntry {
+  id        String   @id @default(cuid())
+  actorId   String?
+  actor     User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actorName String   @default("System")
+  action    String
+  target    String   @default("")
+  category  String // User|Restaurant|System|Feature|Content|Security|Reservation
+  result    String   @default("Success") // Success | Failed
+  at        DateTime @default(now())
+
+  @@index([category])
+  @@index([at])
+}
+
+model AdminNotification {
+  id        String   @id @default(cuid())
+  tone      String // info | warning | danger | success
+  title     String
+  detail    String
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([read])
+}

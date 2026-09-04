@@ -3,6 +3,7 @@ import { AlertTriangle, CalendarDays, Clock, Gift, Mail, Phone, Sofa, User } fro
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { FieldError, Input, Label, Select, Textarea } from '@/components/ui/Field'
+import { fieldErrorsOf, messageOf } from '@/lib/api'
 import { useReservations } from '@/store/ReservationsContext'
 import {
   bookingSources,
@@ -99,7 +100,7 @@ export function ReservationFormModal({
 
   const conflict = findConflict(draft.table, draft.date, draft.timeSlot, reservation?.id)
 
-  const onSubmit = (e: FormEvent) => {
+  const onSubmit = async (e: FormEvent) => {
     e.preventDefault()
     const next: typeof errors = {}
     if (!draft.customerName.trim()) next.customerName = 'Customer name is required.'
@@ -128,14 +129,25 @@ export function ReservationFormModal({
       source: draft.source,
     }
 
-    if (editing && reservation) {
-      update(reservation.id, payload, reason.trim() || 'Booking details revised by the restaurant.')
-      onSaved?.(`Reservation ${reservation.reference} updated.`)
-    } else {
-      const created = create(payload)
-      onSaved?.(`Reservation ${created.reference} created.`)
+    try {
+      if (editing && reservation) {
+        await update(
+          reservation.id,
+          payload,
+          reason.trim() || 'Booking details revised by the restaurant.',
+        )
+        onSaved?.(`Reservation ${reservation.reference} updated.`)
+      } else {
+        const created = await create(payload)
+        onSaved?.(`Reservation ${created.reference} created.`)
+      }
+      onClose()
+    } catch (err) {
+      // The server re-checks availability, so a clash caught there is shown
+      // against the table field rather than closing the form.
+      const details = fieldErrorsOf(err)
+      setErrors(Object.keys(details).length ? details : { table: messageOf(err) })
     }
-    onClose()
   }
 
   return (

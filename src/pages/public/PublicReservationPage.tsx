@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   ArrowRight,
@@ -36,7 +36,9 @@ import {
   PrivateRoom,
   Wall,
 } from '@/components/floorplan/FloorPlan'
-import { publicFloorTables, type FloorTable } from '@/data/tables'
+import { type FloorTable } from '@/data/tables'
+import { fieldErrorsOf, messageOf } from '@/lib/api'
+import { useApi } from '@/lib/useApi'
 import { useReservations } from '@/store/ReservationsContext'
 import {
   occasionTypes,
@@ -44,6 +46,7 @@ import {
   type Reservation,
   type SeatingPreference,
 } from '@/data/reservations'
+import { formatBookingDateLong } from '@/lib/date'
 
 const heroBadges = [
   { icon: Zap, title: 'Instant Confirmation', detail: 'Get confirmed in seconds', ring: '#C9A24A' },
@@ -58,9 +61,50 @@ const legend = [
   { label: 'Unavailable', color: '#B4B2AE' },
 ]
 
-const timeSlots = ['12:30 PM', '1:00 PM', '1:30 PM', '6:30 PM', '7:00 PM', '7:30 PM', '8:00 PM', '8:30 PM', '9:00 PM', '9:30 PM']
-const guestOptions = Array.from({ length: 12 }, (_, i) => `${i + 1}`)
-const bookingDates = ['May 18, 2025', 'May 19, 2025', 'May 20, 2025', 'May 21, 2025', 'May 22, 2025']
+/** Fallback slots, used only until the configured ones arrive. */
+const fallbackSlots = ['12:30 PM', '1:00 PM', '6:30 PM', '7:00 PM', '7:30 PM', '8:00 PM', '9:00 PM']
+
+/**
+ * Bookable dates are generated from today rather than hard-coded, so the form
+ * can never offer a date the server will reject. Values are ISO (the format the
+ * booking rules parse); the label is what the guest reads.
+ */
+function bookableDates(advanceDays: number, allowSameDay: boolean) {
+  const out: { value: string; label: string }[] = []
+  const start = allowSameDay ? 0 : 1
+  const span = Math.min(advanceDays, 30)
+
+  for (let i = start; i <= span; i += 1) {
+    const d = new Date()
+    d.setDate(d.getDate() + i)
+    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    const label = d.toLocaleDateString('en-GB', {
+      weekday: 'short',
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    })
+    out.push({ value, label: i === 0 ? `Today · ${label}` : label })
+  }
+  return out
+}
+
+/** Live table availability for the chosen date and slot (Module 3 FE-4). */
+interface AvailabilityPayload {
+  availableCount: number
+  tables: (FloorTable & { id: string })[]
+}
+
+interface PublicConfig {
+  rules: {
+    minPartySize: number
+    maxPartySize: number
+    advanceDays: number
+    allowSameDay: boolean
+    requireApproval: boolean
+  }
+  timeSlots: { id: string; label: string; start: string; end: string; status: string }[]
+}
 
 interface FormState {
   fullName: string
@@ -78,8 +122,8 @@ const emptyForm: FormState = {
   fullName: '',
   phone: '',
   email: '',
-  date: 'May 18, 2025',
-  timeSlot: '7:00 PM',
+  date: '',
+  timeSlot: '',
   guests: '2',
   occasion: '',
   seating: 'No preference',
@@ -93,10 +137,49 @@ export function PublicReservationPage() {
   const { push } = useToast()
   const navigate = useNavigate()
 
-  const [selected, setSelected] = useState<FloorTable | undefined>(
-    publicFloorTables.find((t) => t.id === 'T12'),
-  )
+  // Booking constraints and open slots come from the restaurant's settings.
+  const { data: config } = useApi<PublicConfig>('/public/config')
+  const rules = config?.rules
+  const dateOptions = bookableDates(rules?.advanceDays ?? 30, rules?.allowSameDay ?? true)
+  const slotOptions = config?.timeSlots.length
+    ? config.timeSlots.map((t) => t.start)
+    : fallbackSlots
+  const maxGuests = rules?.maxPartySize ?? 12
+  const guestOptions = Array.from({ length: maxGuests }, (_, i) => `${i + 1}`)
+
+  const [selected, setSelected] = useState<FloorTable | undefined>()
   const [form, setForm] = useState<FormState>(emptyForm)
+
+  // The floor plan shows the restaurant's real tables, with each one marked
+  // available or taken for the date and slot the guest has chosen.
+  const availability = useApi<AvailabilityPayload>(
+    form.date && form.timeSlot ? '/public/availability' : null,
+    { date: form.date, timeSlot: form.timeSlot, guests: form.guests },
+  )
+  const floorTables = availability.data?.tables ?? []
+
+  // A table that stops being available when the date or slot changes must not
+  // stay selected, or the guest would submit a booking the server will refuse.
+  useEffect(() => {
+    if (!selected) return
+    const match = floorTables.find((t) => t.id === selected.id)
+    if (floorTables.length > 0 && (!match || match.status !== 'Available')) {
+      setSelected(undefined)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availability.data])
+
+  // Seed the date and slot from the live options the moment they arrive.
+  useEffect(() => {
+    if (!config) return
+    setForm((f) => ({
+      ...f,
+      date: dateOptions.some((d) => d.value === f.date) ? f.date : (dateOptions[0]?.value ?? ''),
+      timeSlot: slotOptions.includes(f.timeSlot) ? f.timeSlot : (slotOptions[0] ?? ''),
+    }))
+    // dateOptions/slotOptions are derived from config, so config is the trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config])
   const [errors, setErrors] = useState<FormErrors>({})
   const [submitting, setSubmitting] = useState(false)
   const [booked, setBooked] = useState<Reservation | null>(null)
@@ -147,37 +230,44 @@ export function PublicReservationPage() {
     }
 
     setSubmitting(true)
-    await new Promise((r) => setTimeout(r, 800))
 
-    const record = create({
-      customerName: form.fullName.trim(),
-      phone: form.phone.trim(),
-      email: form.email.trim(),
-      date: form.date,
-      timeSlot: form.timeSlot,
-      guests: Number(form.guests),
-      occasion: form.occasion || 'Other',
-      seating: form.seating,
-      table: selected!.id,
-      specialRequest: form.note.trim(),
-      source: 'Website Booking',
-    })
+    try {
+      const record = await create({
+        customerName: form.fullName.trim(),
+        phone: form.phone.trim(),
+        email: form.email.trim(),
+        date: form.date,
+        timeSlot: form.timeSlot,
+        guests: Number(form.guests),
+        occasion: form.occasion || 'Other',
+        seating: form.seating,
+        table: selected!.id,
+        specialRequest: form.note.trim(),
+        source: 'Website Booking',
+      })
 
-    setSubmitting(false)
-    setBooked(record)
-    push({
-      tone: 'success',
-      title: 'Reservation request sent',
-      detail: `Reference ${record.reference}. Awaiting restaurant approval.`,
-    })
+      setBooked(record)
+      push({
+        tone: 'success',
+        title: 'Reservation request sent',
+        detail: `Reference ${record.reference}. Awaiting restaurant approval.`,
+      })
+    } catch (err) {
+      // The server is the authority on availability and booking rules, so its
+      // message is shown rather than a generic failure.
+      setErrors(fieldErrorsOf(err))
+      push({
+        tone: 'error',
+        title: 'Reservation not saved',
+        detail: messageOf(err, 'The booking could not be saved. Please try again.'),
+      })
+    } finally {
+      setSubmitting(false)
+    }
   }
 
-  const tables = publicFloorTables.map((t) =>
-    t.id === selected?.id
-      ? { ...t, status: 'Selected' as const }
-      : t.status === 'Selected'
-        ? { ...t, status: 'Available' as const }
-        : t,
+  const tables = floorTables.map((t) =>
+    t.id === selected?.id ? { ...t, status: 'Selected' as const } : t,
   )
 
   // Module 1 FE-5 — success state confirming the request reached the restaurant.
@@ -230,7 +320,7 @@ export function PublicReservationPage() {
 
             <dl className="mt-5 grid gap-x-5 gap-y-3 text-left sm:grid-cols-2">
               {[
-                ['Date', booked.date],
+                ['Date', formatBookingDateLong(booked.date)],
                 ['Time slot', booked.timeSlot],
                 ['Guests', `${booked.guests} guests`],
                 ['Table', booked.table],
@@ -429,7 +519,7 @@ export function PublicReservationPage() {
                 value={form.date}
                 error={errors.date}
                 onChange={(e) => set('date', e.target.value)}
-                options={bookingDates.map((d) => ({ value: d, label: d }))}
+                options={dateOptions}
               />
               <FieldError>{errors.date}</FieldError>
             </div>
@@ -445,7 +535,7 @@ export function PublicReservationPage() {
                 value={form.timeSlot}
                 error={errors.timeSlot}
                 onChange={(e) => set('timeSlot', e.target.value)}
-                options={timeSlots.map((t) => ({ value: t, label: t }))}
+                options={slotOptions.map((t) => ({ value: t, label: t }))}
               />
               <FieldError>{errors.timeSlot}</FieldError>
             </div>
@@ -595,19 +685,22 @@ export function PublicReservationPage() {
             <FloorPlan variant="guest" tables={tables} selectedId={selected?.id} onSelect={pickTable} aspect="62%">
               <EntranceSign left="42%" top="-1%" />
 
-              {/* Perimeter + partition walls */}
-              <Wall style={{ left: '0%', top: '6%', width: '41%', height: '1.6%' }} />
-              <Wall style={{ left: '52.5%', top: '6%', width: '47.5%', height: '1.6%' }} />
-              <Wall style={{ left: '58.5%', top: '30%', width: '0.9%', height: '46%' }} />
+              {/*
+                The room is laid out in section bands — window side, main hall,
+                terrace, then the private rooms — so the decor marks those
+                boundaries rather than the old fixed eight-table arrangement.
+              */}
+              <Wall style={{ left: '0%', top: '2%', width: '40%', height: '1.4%' }} />
+              <Wall style={{ left: '54%', top: '2%', width: '46%', height: '1.4%' }} />
 
-              <Planter style={{ left: '18%', top: '50%', width: '28%', height: '3.4%' }} />
+              <Planter style={{ left: '4%', top: '20.5%', width: '92%', height: '2.2%' }} />
+              <Planter style={{ left: '4%', top: '58.5%', width: '92%', height: '2.2%' }} />
 
-              <PrivateRoom style={{ left: '60%', top: '66%', width: '39%', height: '34%' }} />
+              <PrivateRoom style={{ left: '2%', top: '78%', width: '96%', height: '20%' }} />
 
-              <Plant style={{ right: '2%', top: '18%' }} size={26} />
-              <Plant style={{ right: '2%', top: '38%' }} size={26} />
-              <Plant style={{ right: '3%', top: '52%' }} size={26} />
-              <Plant style={{ right: '9%', top: '56%' }} size={22} />
+              <Plant style={{ right: '1.5%', top: '21%' }} size={22} />
+              <Plant style={{ left: '1.5%', top: '40%' }} size={22} />
+              <Plant style={{ right: '1.5%', top: '59%' }} size={22} />
             </FloorPlan>
           </div>
 

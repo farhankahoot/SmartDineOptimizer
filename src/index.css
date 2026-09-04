@@ -81,3 +81,47 @@
     scrollbar-width: none;
   }
 }
+
+/*
+ * Print / "Save as PDF" for the Reports screen (Module 6 FE-7).
+ *
+ * There is no server-side PDF renderer in this build, so the PDF export uses
+ * the browser's own print dialog. Chrome is left with only the report content:
+ * navigation, filters and action buttons are dropped, and the page is forced
+ * onto a light background so ink is not wasted.
+ */
+@media print {
+  @page {
+    margin: 14mm;
+    size: A4 landscape;
+  }
+
+  aside,
+  header,
+  [data-print-hide] {
+    display: none !important;
+  }
+
+  html,
+  body,
+  #root,
+  [data-scroll-root] {
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  /* Cards keep their structure but lose shadows and fills. */
+  .shadow-panel,
+  .shadow-card {
+    box-shadow: none !important;
+  }
+
+  table {
+    break-inside: auto;
+  }
+  tr {
+    break-inside: avoid;
+    break-after: auto;
+  }
+}

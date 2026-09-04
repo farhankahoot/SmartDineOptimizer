@@ -33,13 +33,26 @@ import {
   Wall,
 } from '@/components/floorplan/FloorPlan'
 import { TimeSlotModule } from './TimeSlotModule'
-import {
-  adminFloorTables,
-  quickSummary,
-  slotAlerts,
-  type FloorTable,
-  type TableType,
-} from '@/data/tables'
+import { type FloorTable, type TableType } from '@/data/tables'
+import { api, messageOf } from '@/lib/api'
+import { useApi } from '@/lib/useApi'
+
+interface TablesPayload {
+  tables: (FloorTable & { recordId: string })[]
+}
+
+interface TableStatsPayload {
+  total: number
+  available: number
+  reserved: number
+  blocked: number
+  activeSlots: number
+  captions: { available: string; reserved: string; blocked: string }
+}
+
+interface PeakPayload {
+  peakHours: { slot: string; booked: number; capacity: number; load: number; label: string }[]
+}
 
 const typeFilters: (TableType | 'All')[] = ['All', 'Couple', 'Family', 'Group', 'Private']
 const filterIcons = { All: null, Couple: Users, Family: Users, Group: Users, Private: Lock }
@@ -64,7 +77,11 @@ export function TableManagementPage() {
   const { allows } = useAuth()
   const canManage = allows('manage:tables')
 
-  const [allTables, setAllTables] = useState<FloorTable[]>(adminFloorTables)
+  const tablesQuery = useApi<TablesPayload>('/tables')
+  const statsQuery = useApi<TableStatsPayload>('/tables/stats')
+  const peaksQuery = useApi<PeakPayload>('/dashboard/peak-hours')
+
+  const allTables = tablesQuery.data?.tables ?? []
   const [typeFilter, setTypeFilter] = useState<TableType | 'All'>('All')
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<string | undefined>()
@@ -85,42 +102,115 @@ export function TableManagementPage() {
 
   const selectedTable = allTables.find((t) => t.id === selected)
 
-  // Module 3 FE-6 — live counts drive the KPI row instead of static numbers.
-  const stats = useMemo(() => {
-    const total = allTables.length
-    const pct = (n: number) => (total === 0 ? '0% of total' : `${Math.round((n / total) * 100)}% of total`)
-    const available = allTables.filter((t) => t.status === 'Available').length
-    const reserved = allTables.filter((t) => t.status === 'Reserved' || t.status === 'Booked').length
-    const blocked = allTables.filter((t) => t.status === 'Blocked' || t.status === 'Unavailable').length
-    return [
-      { key: 'total', label: 'Total Tables', value: String(total), caption: 'All tables in restaurant', color: '#C99A3E' },
-      { key: 'available', label: 'Available Tables', value: String(available), caption: pct(available), color: '#2E7D32' },
-      { key: 'reserved', label: 'Reserved Tables', value: String(reserved), caption: pct(reserved), color: '#1B62B5' },
-      { key: 'blocked', label: 'Blocked Tables', value: String(blocked), caption: pct(blocked), color: '#E4572E' },
-      { key: 'slots', label: 'Active Time Slots', value: '4', caption: 'For selected day', color: '#7B3FBF' },
-    ]
-  }, [allTables])
+  // Module 3 FE-6 — the KPI row is counted by the server across every table,
+  // not just the ones matching the current filter.
+  const s = statsQuery.data
+  const stats = [
+    { key: 'total', label: 'Total Tables', value: String(s?.total ?? 0), caption: 'All tables in restaurant', color: '#C99A3E' },
+    { key: 'available', label: 'Available Tables', value: String(s?.available ?? 0), caption: s?.captions.available ?? '—', color: '#2E7D32' },
+    { key: 'reserved', label: 'Reserved Tables', value: String(s?.reserved ?? 0), caption: s?.captions.reserved ?? '—', color: '#1B62B5' },
+    { key: 'blocked', label: 'Blocked Tables', value: String(s?.blocked ?? 0), caption: s?.captions.blocked ?? '—', color: '#E4572E' },
+    { key: 'slots', label: 'Active Time Slots', value: String(s?.activeSlots ?? 0), caption: 'Open for booking', color: '#7B3FBF' },
+  ]
 
-  const saveTable = (draft: Omit<FloorTable, 'x' | 'y' | 'w' | 'h'>, isEdit: boolean) => {
-    if (isEdit && editing) {
-      setAllTables((prev) => prev.map((t) => (t.id === editing.id ? { ...t, ...draft } : t)))
-      setSelected(draft.id)
-      push({ tone: 'success', title: `Table ${draft.id} updated` })
-    } else {
-      const slot = spareSlots[allTables.length % spareSlots.length]
-      setAllTables((prev) => [...prev, { ...draft, ...slot }])
-      push({ tone: 'success', title: `Table ${draft.id} added`, detail: `${draft.seats} seats · ${draft.section}` })
+  const reload = () => {
+    tablesQuery.refresh()
+    statsQuery.refresh()
+    peaksQuery.refresh()
+  }
+
+  /** Live equivalents of the old static side panels. */
+  const peaks = peaksQuery.data?.peakHours ?? []
+  const busiest = peaks.reduce<(typeof peaks)[number] | null>(
+    (best, p) => (!best || p.load > best.load ? p : best),
+    null,
+  )
+  const quickSummary = [
+    { label: 'Peak reservation slot', value: busiest?.slot ?? '—', icon: 'clock' as const },
+    { label: 'Tables blocked today', value: String(s?.blocked ?? 0), icon: 'lock' as const },
+    {
+      label: 'Available family tables',
+      value: String(allTables.filter((t) => t.type === 'Family' && t.status === 'Available').length),
+      icon: 'users' as const,
+    },
+    {
+      label: 'Next fully booked slot',
+      value: peaks.find((p) => p.load >= 90)?.slot ?? 'None',
+      icon: 'clock' as const,
+    },
+  ]
+
+  const slotAlerts = [
+    ...peaks
+      .filter((p) => p.load >= 70)
+      .slice(0, 2)
+      .map((p) => ({
+        tone: p.load >= 90 ? ('danger' as const) : ('warn' as const),
+        title: `${p.slot} is ${p.load}% booked`,
+        detail: `${Math.max(0, p.capacity - p.booked)} table(s) left`,
+        time: 'Now',
+      })),
+    ...allTables
+      .filter((t) => t.status === 'Blocked')
+      .slice(0, 1)
+      .map((t) => ({
+        tone: 'danger' as const,
+        title: `Table ${t.id} blocked`,
+        detail: 'Not offered to guests',
+        time: 'Now',
+      })),
+    {
+      tone: 'success' as const,
+      title: `${allTables.filter((t) => t.type === 'Family' && t.status === 'Available').length} family tables available`,
+      detail: 'Across all open slots',
+      time: 'Now',
+    },
+  ]
+
+  const saveTable = async (draft: Omit<FloorTable, 'x' | 'y' | 'w' | 'h'>, isEdit: boolean) => {
+    const body = {
+      code: draft.id,
+      seats: draft.seats,
+      type: draft.type,
+      section: draft.section,
+      shape: draft.shape,
+      status: draft.status,
+    }
+
+    try {
+      if (isEdit && editing) {
+        await api.patch(`/tables/${editing.id}`, body)
+        setSelected(draft.id)
+        push({ tone: 'success', title: `Table ${draft.id} updated` })
+      } else {
+        const slot = spareSlots[allTables.length % spareSlots.length]
+        await api.post('/tables', { ...body, ...slot })
+        push({
+          tone: 'success',
+          title: `Table ${draft.id} added`,
+          detail: `${draft.seats} seats · ${draft.section}`,
+        })
+      }
+      reload()
+    } catch (err) {
+      push({ tone: 'error', title: 'Table not saved', detail: messageOf(err) })
     }
   }
 
-  const blockTable = () => {
+  const blockTable = async () => {
     if (!selectedTable) return
     const next = selectedTable.status === 'Blocked' ? 'Available' : 'Blocked'
-    setAllTables((prev) => prev.map((t) => (t.id === selectedTable.id ? { ...t, status: next } : t)))
-    push({
-      tone: next === 'Blocked' ? 'warning' : 'success',
-      title: `Table ${selectedTable.id} ${next === 'Blocked' ? 'blocked' : 'unblocked'}`,
-    })
+    try {
+      await api.patch(`/tables/${selectedTable.id}`, { status: next })
+      push({
+        tone: next === 'Blocked' ? 'warning' : 'success',
+        title: `Table ${selectedTable.id} ${next === 'Blocked' ? 'blocked' : 'unblocked'}`,
+      })
+      reload()
+    } catch (err) {
+      // The server refuses to block a table that still holds live bookings.
+      push({ tone: 'error', title: `Table ${selectedTable.id} not changed`, detail: messageOf(err) })
+    }
   }
 
   return (
@@ -367,11 +457,17 @@ export function TableManagementPage() {
         title="Delete this table?"
         message={`Table ${removing?.id ?? ''} will be removed from the floor plan and can no longer be booked.`}
         onCancel={() => setRemoving(null)}
-        onConfirm={() => {
+        onConfirm={async () => {
           if (removing) {
-            setAllTables((prev) => prev.filter((t) => t.id !== removing.id))
-            if (selected === removing.id) setSelected(undefined)
-            push({ tone: 'info', title: `Table ${removing.id} deleted` })
+            try {
+              await api.del(`/tables/${removing.id}`)
+              if (selected === removing.id) setSelected(undefined)
+              push({ tone: 'info', title: `Table ${removing.id} deleted` })
+              reload()
+            } catch (err) {
+              // A table holding live bookings cannot be deleted.
+              push({ tone: 'error', title: 'Table not deleted', detail: messageOf(err) })
+            }
           }
           setRemoving(null)
         }}

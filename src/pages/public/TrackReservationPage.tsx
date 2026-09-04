@@ -19,6 +19,7 @@ import { EmptyState } from '@/components/ui/States'
 import { StatusBadge, StatusTimeline } from '@/components/reservation/StatusTimeline'
 import { useReservations } from '@/store/ReservationsContext'
 import type { Reservation } from '@/data/reservations'
+import { formatBookingDateLong } from '@/lib/date'
 
 const statusCopy: Record<Reservation['status'], string> = {
   Pending: 'Your request is with the restaurant. You will hear back shortly.',
@@ -43,10 +44,12 @@ export function TrackReservationPage() {
 
   const run = async (ref: string, key: string) => {
     setBusy(true)
-    await new Promise((r) => setTimeout(r, 550))
-    setResult(lookup(ref, key))
-    setSearched(true)
-    setBusy(false)
+    try {
+      setResult(await lookup(ref, key))
+    } finally {
+      setSearched(true)
+      setBusy(false)
+    }
   }
 
   // Deep link from the booking confirmation screen.
@@ -210,7 +213,7 @@ export function TrackReservationPage() {
                 </p>
 
                 <dl className="mt-4 grid gap-x-5 gap-y-3.5 sm:grid-cols-2">
-                  <Detail icon={<CalendarDays />} label="Date" value={result.date} />
+                  <Detail icon={<CalendarDays />} label="Date" value={formatBookingDateLong(result.date)} />
                   <Detail icon={<Clock />} label="Time slot" value={result.timeSlot} />
                   <Detail icon={<Users />} label="Guests" value={`${result.guests} guests`} />
                   <Detail icon={<UtensilsCrossed />} label="Occasion" value={result.occasion} />

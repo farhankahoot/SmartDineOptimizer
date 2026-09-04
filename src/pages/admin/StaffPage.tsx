@@ -30,17 +30,37 @@ import { useToast } from '@/components/ui/Toast'
 import { cn } from '@/lib/cn'
 import { useAuth } from '@/auth/AuthContext'
 import {
-  allocationPlan,
+
   availabilities,
   shiftHours,
   shifts,
-  staffMembers,
   staffRoles,
   type Shift,
   type StaffAvailability,
   type StaffMember,
   type StaffRole,
 } from '@/data/staff'
+import { api, messageOf } from '@/lib/api'
+import { useApi } from '@/lib/useApi'
+
+interface StaffPayload {
+  staff: StaffMember[]
+}
+
+/** Module 4 FE-6 — requirement per shift, computed by the server. */
+interface AllocationPayload {
+  basis: string
+  ratios: { guestsPerServer: number; guestsPerChef: number }
+  shifts: {
+    shift: Shift
+    hours: string
+    expectedGuests: number
+    reservations: number
+    requiredChefs: number
+    requiredServing: number
+    requiredCleaning: number
+  }[]
+}
 
 const availabilityTone: Record<StaffAvailability, BadgeTone> = {
   Available: 'confirmed',
@@ -79,7 +99,11 @@ export function StaffPage() {
   const { allows } = useAuth()
   const canManage = allows('manage:staff')
 
-  const [rows, setRows] = useState<StaffMember[]>(staffMembers)
+  const staffQuery = useApi<StaffPayload>('/staff')
+  const allocationQuery = useApi<AllocationPayload>('/staff/allocation')
+
+  const rows = staffQuery.data?.staff ?? []
+  const allocationPlan = allocationQuery.data?.shifts ?? []
   const [tab, setTab] = useState<'records' | 'availability' | 'allocation'>('records')
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState('All roles')
@@ -125,7 +149,7 @@ export function StaffPage() {
     setFormOpen(true)
   }
 
-  const save = (e: FormEvent) => {
+  const save = async (e: FormEvent) => {
     e.preventDefault()
     const next: typeof errors = {}
     if (!draft.name.trim()) next.name = 'Staff name is required.'
@@ -134,18 +158,29 @@ export function StaffPage() {
     setErrors(next)
     if (Object.keys(next).length) return
 
-    if (editing) {
-      setRows((prev) => prev.map((s) => (s.id === editing.id ? { ...s, ...draft, name: draft.name.trim() } : s)))
-      push({ tone: 'success', title: 'Staff record updated', detail: draft.name })
-    } else {
-      const id = `ST-${String(rows.length + 1).padStart(2, '0')}`
-      setRows((prev) => [
-        ...prev,
-        { id, ...draft, name: draft.name.trim(), joined: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) },
-      ])
-      push({ tone: 'success', title: 'Staff member added', detail: draft.name })
+    const body = {
+      name: draft.name.trim(),
+      role: draft.role,
+      phone: draft.phone.trim(),
+      shift: draft.shift,
+      availability: draft.availability,
     }
-    setFormOpen(false)
+
+    try {
+      if (editing) {
+        await api.patch(`/staff/${editing.id}`, body)
+        push({ tone: 'success', title: 'Staff record updated', detail: body.name })
+      } else {
+        // The server allocates the next ST-nn code.
+        await api.post('/staff', body)
+        push({ tone: 'success', title: 'Staff member added', detail: body.name })
+      }
+      staffQuery.refresh()
+      allocationQuery.refresh()
+      setFormOpen(false)
+    } catch (err) {
+      setErrors({ name: messageOf(err) })
+    }
   }
 
   const columns: Column<StaffMember>[] = [
@@ -312,7 +347,7 @@ export function StaffPage() {
             <div className="grid gap-4 p-4 lg:grid-cols-3">
               {shifts.map((shift) => {
                 const inShift = rows.filter((s) => s.shift === shift)
-                const plan = allocationPlan.find((a) => a.shift === shift)!
+                const plan = allocationPlan.find((a) => a.shift === shift)
                 return (
                   <Card key={shift} className="p-4">
                     <div className="flex items-baseline justify-between gap-2">
@@ -320,7 +355,8 @@ export function StaffPage() {
                       <span className="text-[11px] text-ink-muted">{shiftHours[shift]}</span>
                     </div>
                     <p className="mt-1 text-[11.5px] text-ink-muted">
-                      {plan.expectedGuests} expected guests · {plan.reservations} reservations
+                      {plan?.expectedGuests ?? 0} expected guests · {plan?.reservations ?? 0}{' '}
+                      reservations
                     </p>
 
                     <ul className="mt-3.5 grid gap-2">
@@ -358,8 +394,9 @@ export function StaffPage() {
                 Predicted requirement vs rostered staff
               </SectionTitle>
               <p className="mt-1 text-[11.5px] text-ink-muted">
-                Requirements come from the employee-requirement prediction model and update with
-                expected footfall.
+                Requirement is derived from guests held in each shift&apos;s slots at{' '}
+                {allocationQuery.data?.ratios.guestsPerChef ?? 30} guests per chef and{' '}
+                {allocationQuery.data?.ratios.guestsPerServer ?? 20} per server, set in Settings.
               </p>
 
               <div className="mt-3.5 grid gap-3">
@@ -524,10 +561,16 @@ export function StaffPage() {
         message={`${removing?.name ?? ''} will be removed from the roster and excluded from allocation planning.`}
         confirmLabel="Remove"
         onCancel={() => setRemoving(null)}
-        onConfirm={() => {
+        onConfirm={async () => {
           if (removing) {
-            setRows((prev) => prev.filter((s) => s.id !== removing.id))
-            push({ tone: 'info', title: 'Staff member removed', detail: removing.name })
+            try {
+              await api.del(`/staff/${removing.id}`)
+              push({ tone: 'info', title: 'Staff member removed', detail: removing.name })
+              staffQuery.refresh()
+              allocationQuery.refresh()
+            } catch (err) {
+              push({ tone: 'error', title: 'Staff member not removed', detail: messageOf(err) })
+            }
           }
           setRemoving(null)
         }}

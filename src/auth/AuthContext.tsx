@@ -1,99 +1,113 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react'
 import { can, type Permission, type Role } from '@/data/users'
-import { useUsers } from '@/store/UsersContext'
 import { useSystem } from '@/store/SystemContext'
+import { api, clearToken, getToken, setToken, setUnauthorizedHandler } from '@/lib/api'
 
 export interface Session {
   id: string
   name: string
   email: string
   role: Role
+  /** Granted by the server; the client only uses it to hide controls. */
+  permissions: Permission[]
 }
 
 interface AuthValue {
   user: Session | null
+  /** True until the stored token has been checked against the server. */
+  loading: boolean
   signIn: (email: string, password: string) => Promise<Session>
   signOut: () => void
-  /** Module 8 FE-3/FE-4 — every gated action funnels through this. */
+  /** Module 8 FE-3/FE-4 — every gated control funnels through this. */
   allows: (permission: Permission) => boolean
 }
 
 const AuthContext = createContext<AuthValue | null>(null)
 
-const STORAGE_KEY = 'smartdine.session'
-
-function readStoredSession(): Session | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? (JSON.parse(raw) as Session) : null
-  } catch {
-    return null
-  }
+interface UserPayload {
+  user: { id: string; name: string; email: string; role: Role; permissions: Permission[] }
 }
 
-/** Simulates the round-trip a real `/auth/login` call would take. */
-const delay = (ms: number) => new Promise((r) => setTimeout(r, ms))
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<Session | null>(readStoredSession)
-  const { find } = useUsers()
+  const [user, setUser] = useState<Session | null>(null)
+  const [loading, setLoading] = useState(Boolean(getToken()))
   const { system } = useSystem()
 
-  const signIn = useCallback(
-    async (email: string, password: string) => {
-      await delay(600)
+  // A token rejected by the server clears the session rather than leaving the
+  // console in a half-signed-in state.
+  useEffect(() => {
+    setUnauthorizedHandler(() => setUser(null))
+  }, [])
 
-      const match = find(email)
+  // Restores the session on boot. The server is the authority: a token for a
+  // deleted or blocked account will not resolve to a user.
+  useEffect(() => {
+    if (!getToken()) {
+      setLoading(false)
+      return
+    }
 
-      if (!match || match.password !== password) {
-        throw new Error('Incorrect email or password. Please try again.')
-      }
-      if (match.status === 'Suspended') {
-        throw new Error('This account has been blocked by an administrator.')
-      }
-      if (match.status === 'Invited') {
-        throw new Error(
-          'This invitation has not been accepted yet. Check your email to set a password.',
-        )
-      }
-      // System control — administrators can lock everyone else out.
-      if (system.adminOnlyLogin && match.role !== 'admin') {
-        throw new Error(
-          'The console is currently restricted to administrators. Contact your administrator for access.',
-        )
-      }
+    let cancelled = false
+    api
+      .get<UserPayload>('/auth/me')
+      .then(({ user: u }) => {
+        if (!cancelled) setUser(u)
+      })
+      .catch(() => {
+        clearToken()
+        if (!cancelled) setUser(null)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
 
-      const session: Session = {
-        id: match.id,
-        name: match.name,
-        email: match.email,
-        role: match.role,
-      }
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(session))
-      setUser(session)
-      return session
-    },
-    [find, system.adminOnlyLogin],
-  )
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const signIn = useCallback(async (email: string, password: string) => {
+    const result = await api.post<UserPayload & { token: string }>('/auth/login', {
+      email,
+      password,
+    })
+    setToken(result.token)
+    setUser(result.user)
+    return result.user
+  }, [])
 
   const signOut = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY)
+    // Revoke server-side, but clear locally regardless so the user is out.
+    void api.post('/auth/logout').catch(() => undefined)
+    clearToken()
     setUser(null)
   }, [])
 
   const allows = useCallback(
     (permission: Permission) => {
       if (!user) return false
-      // Read-only mode leaves every view reachable but blocks writes.
-      if (system.readOnlyMode && permission.startsWith('manage:') && user.role !== 'admin') {
+      // Read-only mode leaves every view reachable but hides write controls.
+      // The server enforces the same rule, so this is presentation only.
+      if (system.readOnlyMode && permission.startsWith('manage:') && user.role !== 'superadmin') {
         return false
       }
-      return can(user.role, permission)
+      return user.permissions ? user.permissions.includes(permission) : can(user.role, permission)
     },
     [user, system.readOnlyMode],
   )
 
-  const value = useMemo(() => ({ user, signIn, signOut, allows }), [user, signIn, signOut, allows])
+  const value = useMemo(
+    () => ({ user, loading, signIn, signOut, allows }),
+    [user, loading, signIn, signOut, allows],
+  )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

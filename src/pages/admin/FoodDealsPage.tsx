@@ -33,15 +33,45 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { EmptyState } from '@/components/ui/States'
 import { useToast } from '@/components/ui/Toast'
 import { useAuth } from '@/auth/AuthContext'
-import {
-  dealCategories,
-  dealOccasions,
-  dealPerformance,
-  dealStats,
-  deals,
-  type Deal,
-} from '@/data/deals'
-import { requestAlerts, specialRequests, type RequestStatus, type SpecialRequest } from '@/data/requests'
+import { dealCategories, dealOccasions, type Deal } from '@/data/deals'
+import { type RequestStatus, type SpecialRequest } from '@/data/requests'
+import { api, messageOf } from '@/lib/api'
+import { useApi } from '@/lib/useApi'
+
+interface ApiDeal {
+  id: string
+  name: string
+  category: string
+  occasion: string
+  price: number
+  priceLabel: string
+  items: string
+  active: boolean
+}
+
+interface DealStatsPayload {
+  active: number
+  birthdayBookings: number
+  familyBookings: number
+  pendingRequests: number
+}
+
+interface PerformancePayload {
+  basis: string
+  ranked: { id: string; name: string; occasion: string; matchingBookings: number; price: number }[]
+  top: { name: string; occasion: string; matchingBookings: number } | null
+  lowest: { name: string; occasion: string; matchingBookings: number } | null
+  totalMatched: number
+  coveragePct: number
+}
+
+interface RequestsPayload {
+  requests: SpecialRequest[]
+}
+
+interface AlertsPayload {
+  alerts: { id: string; count: number; text: string; icon: string; color: string }[]
+}
 
 const statIcons = [Tag, Cake, Users, Bell]
 
@@ -50,6 +80,7 @@ const requestTone: Record<RequestStatus, BadgeTone> = {
   'In Progress': 'inProgress',
   Accepted: 'accepted',
   Completed: 'confirmed',
+  Rejected: 'cancelled',
 }
 
 interface DealDraft {
@@ -76,8 +107,40 @@ export function FoodDealsPage() {
   const { allows } = useAuth()
   const canManageDeals = allows('manage:deals')
 
-  const [dealRows, setDealRows] = useState(deals)
-  const [requestRows, setRequestRows] = useState(specialRequests)
+  const dealsQuery = useApi<{ deals: ApiDeal[] }>('/deals')
+  const statsQuery = useApi<DealStatsPayload>('/deals/stats')
+  const perfQuery = useApi<PerformancePayload>('/deals/performance')
+  const requestsQuery = useApi<RequestsPayload>('/special-requests')
+  const alertsQuery = useApi<AlertsPayload>('/special-requests/alerts')
+
+  // The table renders a formatted price string, so the numeric API value is
+  // mapped to the label the column expects.
+  const dealRows: Deal[] = (dealsQuery.data?.deals ?? []).map((d) => ({
+    id: d.id,
+    name: d.name,
+    category: d.category,
+    occasion: d.occasion,
+    price: d.priceLabel,
+    items: d.items,
+    active: d.active,
+  }))
+  const requestRows = requestsQuery.data?.requests ?? []
+  const requestAlerts = alertsQuery.data?.alerts ?? []
+
+  const st = statsQuery.data
+  const dealStats = [
+    { key: 'active', label: 'Active Deals', value: String(st?.active ?? 0), caption: 'Deals currently active', color: '#C0392B' },
+    { key: 'birthday', label: 'Birthday Bookings', value: String(st?.birthdayBookings ?? 0), caption: 'All time', color: '#D9932B' },
+    { key: 'family', label: 'Family Dinner Bookings', value: String(st?.familyBookings ?? 0), caption: 'All time', color: '#1E9E6A' },
+    { key: 'pending', label: 'Pending Special Requests', value: String(st?.pendingRequests ?? 0), caption: 'Requires Attention', color: '#7B57C9' },
+  ]
+
+  const perf = perfQuery.data
+  const reloadDeals = () => {
+    dealsQuery.refresh()
+    statsQuery.refresh()
+    perfQuery.refresh()
+  }
   const [detail, setDetail] = useState<SpecialRequest | null>(null)
 
   const [dealFormOpen, setDealFormOpen] = useState(false)
@@ -87,17 +150,29 @@ export function FoodDealsPage() {
   const [removingDeal, setRemovingDeal] = useState<Deal | null>(null)
   const [rejecting, setRejecting] = useState<SpecialRequest | null>(null)
 
-  const toggleDeal = (deal: Deal) => {
-    setDealRows((prev) => prev.map((d) => (d.id === deal.id ? { ...d, active: !d.active } : d)))
-    push({
-      tone: deal.active ? 'info' : 'success',
-      title: `${deal.name} ${deal.active ? 'deactivated' : 'activated'}`,
-    })
+  const toggleDeal = async (deal: Deal) => {
+    try {
+      await api.patch(`/deals/${deal.id}`, { active: !deal.active })
+      push({
+        tone: deal.active ? 'info' : 'success',
+        title: `${deal.name} ${deal.active ? 'deactivated' : 'activated'}`,
+      })
+      reloadDeals()
+    } catch (err) {
+      push({ tone: 'error', title: 'Deal not changed', detail: messageOf(err) })
+    }
   }
 
-  const setRequestStatus = (id: string, status: RequestStatus, message: string) => {
-    setRequestRows((prev) => prev.map((r) => (r.id === id ? { ...r, status } : r)))
-    push({ tone: 'success', title: message })
+  const setRequestStatus = async (id: string, status: RequestStatus, message: string) => {
+    try {
+      await api.patch(`/special-requests/${id}`, { status })
+      push({ tone: 'success', title: message })
+      requestsQuery.refresh()
+      alertsQuery.refresh()
+      statsQuery.refresh()
+    } catch (err) {
+      push({ tone: 'error', title: 'Request not updated', detail: messageOf(err) })
+    }
   }
 
   const openCreateDeal = () => {
@@ -121,7 +196,7 @@ export function FoodDealsPage() {
     setDealFormOpen(true)
   }
 
-  const saveDeal = (e: React.FormEvent) => {
+  const saveDeal = async (e: React.FormEvent) => {
     e.preventDefault()
     const next: typeof dealErrors = {}
     if (!dealDraft.name.trim()) next.name = 'Deal name is required.'
@@ -141,23 +216,29 @@ export function FoodDealsPage() {
     setDealErrors(next)
     if (Object.keys(next).length) return
 
+    // Price crosses the wire as a number; the server stores it in paisa.
     const payload = {
       name: dealDraft.name.trim(),
       category: dealDraft.category,
       occasion: dealDraft.occasion,
-      price: `\u20A8${price.toLocaleString('en-IN')}`,
+      price,
       items: dealDraft.items.trim(),
       active: dealDraft.active,
     }
 
-    if (editingDeal) {
-      setDealRows((prev) => prev.map((d) => (d.id === editingDeal.id ? { ...d, ...payload } : d)))
-      push({ tone: 'success', title: 'Deal updated', detail: payload.name })
-    } else {
-      setDealRows((prev) => [...prev, { id: `D${prev.length + 1}`, ...payload }])
-      push({ tone: 'success', title: 'Deal created', detail: payload.name })
+    try {
+      if (editingDeal) {
+        await api.patch(`/deals/${editingDeal.id}`, payload)
+        push({ tone: 'success', title: 'Deal updated', detail: payload.name })
+      } else {
+        await api.post('/deals', payload)
+        push({ tone: 'success', title: 'Deal created', detail: payload.name })
+      }
+      reloadDeals()
+      setDealFormOpen(false)
+    } catch (err) {
+      setDealErrors({ name: messageOf(err) })
     }
-    setDealFormOpen(false)
   }
 
   const dealColumns: Column<Deal>[] = [
@@ -403,9 +484,15 @@ export function FoodDealsPage() {
               <div className="mt-3 grid gap-2.5">
                 <PerfTile bg="bg-[#FDF8EC]">
                   <div className="min-w-0">
-                    <p className="text-[11.5px] text-ink-soft">{dealPerformance.mostSelected.title}</p>
-                    <p className="mt-1 text-[17px] font-extrabold text-ink">{dealPerformance.mostSelected.name}</p>
-                    <p className="mt-1.5 text-[10.5px] text-ink-muted">{dealPerformance.mostSelected.caption}</p>
+                    <p className="text-[11.5px] text-ink-soft">Most matched deal</p>
+                    <p className="mt-1 text-[17px] font-extrabold text-ink">
+                      {perf?.top?.name ?? '—'}
+                    </p>
+                    <p className="mt-1.5 text-[10.5px] text-ink-muted">
+                      {perf?.top
+                        ? `${perf.top.matchingBookings} ${perf.top.occasion} booking(s)`
+                        : 'No bookings yet'}
+                    </p>
                   </div>
                   <span className="flex size-[42px] shrink-0 items-center justify-center rounded-full border border-gold-300 bg-white">
                     <Award className="size-[22px] text-gold-400" strokeWidth={1.8} />
@@ -414,11 +501,14 @@ export function FoodDealsPage() {
 
                 <PerfTile bg="bg-[#FAFCF9]">
                   <div className="min-w-0">
-                    <p className="text-[11.5px] text-ink-soft">{dealPerformance.conversion.title}</p>
-                    <p className="mt-1 text-[20px] font-extrabold text-ink">{dealPerformance.conversion.value}</p>
+                    <p className="text-[11.5px] text-ink-soft">Occasion coverage</p>
+                    <p className="mt-1 text-[20px] font-extrabold text-ink">
+                      {perf?.coveragePct ?? 0}%
+                    </p>
                     <p className="mt-1.5 text-[10.5px]">
-                      <span className="font-bold text-state-success">{dealPerformance.conversion.delta}</span>{' '}
-                      <span className="text-ink-muted">{dealPerformance.conversion.caption}</span>
+                      <span className="text-ink-muted">
+                        of bookings fall on an occasion a deal covers
+                      </span>
                     </p>
                   </div>
                   <TrendingUp className="size-[30px] shrink-0 text-gold-400" strokeWidth={2.2} />
@@ -426,18 +516,28 @@ export function FoodDealsPage() {
 
                 <PerfTile bg="bg-[#FDFBF6]">
                   <div className="min-w-0">
-                    <p className="text-[11.5px] text-ink-soft">{dealPerformance.revenue.title}</p>
-                    <p className="mt-1 text-[19px] font-extrabold text-ink">{dealPerformance.revenue.value}</p>
-                    <p className="mt-1.5 text-[10.5px] text-ink-muted">{dealPerformance.revenue.caption}</p>
+                    <p className="text-[11.5px] text-ink-soft">Bookings on deal occasions</p>
+                    <p className="mt-1 text-[19px] font-extrabold text-ink">
+                      {perf?.totalMatched ?? 0}
+                    </p>
+                    <p className="mt-1.5 text-[10.5px] text-ink-muted">
+                      Deal selection is not recorded per booking
+                    </p>
                   </div>
                   <Wallet className="size-[28px] shrink-0 text-gold-400" strokeWidth={1.9} />
                 </PerfTile>
 
                 <PerfTile bg="bg-[#FDF1F1]">
                   <div className="min-w-0">
-                    <p className="text-[11.5px] text-ink-soft">{dealPerformance.lowPerforming.title}</p>
-                    <p className="mt-1 text-[17px] font-extrabold text-ink">{dealPerformance.lowPerforming.name}</p>
-                    <p className="mt-1.5 text-[10.5px] text-ink-muted">{dealPerformance.lowPerforming.caption}</p>
+                    <p className="text-[11.5px] text-ink-soft">Least matched deal</p>
+                    <p className="mt-1 text-[17px] font-extrabold text-ink">
+                      {perf?.lowest?.name ?? '—'}
+                    </p>
+                    <p className="mt-1.5 text-[10.5px] text-ink-muted">
+                      {perf?.lowest
+                        ? `${perf.lowest.matchingBookings} ${perf.lowest.occasion} booking(s)`
+                        : 'No bookings yet'}
+                    </p>
                   </div>
                   <TrendingDown className="size-[28px] shrink-0 text-state-dangerSolid" strokeWidth={2.2} />
                 </PerfTile>
@@ -598,10 +698,15 @@ export function FoodDealsPage() {
         title="Delete this deal?"
         message={`${removingDeal?.name ?? ''} will be removed and can no longer be attached to a reservation.`}
         onCancel={() => setRemovingDeal(null)}
-        onConfirm={() => {
+        onConfirm={async () => {
           if (removingDeal) {
-            setDealRows((prev) => prev.filter((x) => x.id !== removingDeal.id))
-            push({ tone: 'info', title: 'Deal deleted', detail: removingDeal.name })
+            try {
+              await api.del(`/deals/${removingDeal.id}`)
+              push({ tone: 'info', title: 'Deal deleted', detail: removingDeal.name })
+              reloadDeals()
+            } catch (err) {
+              push({ tone: 'error', title: 'Deal not deleted', detail: messageOf(err) })
+            }
           }
           setRemovingDeal(null)
         }}
@@ -613,10 +718,11 @@ export function FoodDealsPage() {
         message={`${rejecting?.customerName ?? ''} will be told their special request could not be arranged.`}
         confirmLabel="Reject request"
         onCancel={() => setRejecting(null)}
-        onConfirm={() => {
+        onConfirm={async () => {
           if (rejecting) {
-            setRequestRows((prev) => prev.filter((x) => x.id !== rejecting.id))
-            push({ tone: 'info', title: 'Request rejected', detail: rejecting.customerName })
+            // Rejecting records a status rather than deleting the row, so the
+            // kitchen keeps a history of what was asked for.
+            await setRequestStatus(rejecting.id, 'Rejected', 'Request rejected')
           }
           setRejecting(null)
         }}

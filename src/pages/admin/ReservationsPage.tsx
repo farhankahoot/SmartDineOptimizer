@@ -38,10 +38,22 @@ import {
   historyStatuses,
   matchesPartySize,
   reservationFilters,
-  reservationStats,
-  upcomingBookings,
   type Reservation,
 } from '@/data/reservations'
+import { formatBookingDate } from '@/lib/date'
+import { useApi } from '@/lib/useApi'
+
+interface StatsPayload {
+  total: number
+  pending: number
+  confirmed: number
+  cancelled: number
+  guests: number
+}
+
+interface UpcomingPayload {
+  bookings: { id: string; time: string; name: string; guests: number; table: string }[]
+}
 
 const statIcons = [CalendarDays, Clock, CheckCircle2, XCircle, UsersRound]
 
@@ -58,6 +70,22 @@ export function ReservationsPage() {
   const { push } = useToast()
   const { allows } = useAuth()
   const { reservations, setStatus } = useReservations()
+
+  // Counters and the next-up list are computed by the server across every
+  // booking, not just the page of rows currently loaded.
+  const statsQuery = useApi<StatsPayload>('/reservations/stats')
+  const upcomingQuery = useApi<UpcomingPayload>('/reservations/upcoming')
+
+  const c = statsQuery.data
+  const reservationStats = [
+    { key: 'total', label: 'Total Reservations', value: (c?.total ?? 0).toLocaleString('en-PK'), caption: 'All statuses' },
+    { key: 'pending', label: 'Pending Reservations', value: (c?.pending ?? 0).toLocaleString('en-PK'), caption: 'Awaiting approval' },
+    { key: 'confirmed', label: 'Confirmed Reservations', value: (c?.confirmed ?? 0).toLocaleString('en-PK'), caption: 'Table assigned' },
+    { key: 'cancelled', label: 'Cancelled Reservations', value: (c?.cancelled ?? 0).toLocaleString('en-PK'), caption: 'Released their table' },
+    { key: 'guests', label: 'Guests Expected', value: (c?.guests ?? 0).toLocaleString('en-PK'), caption: 'Across live bookings' },
+  ]
+
+  const upcomingBookings = upcomingQuery.data?.bookings ?? []
 
   const canManage = allows('manage:reservations')
 
@@ -121,7 +149,7 @@ export function ReservationsPage() {
       ),
     },
     { key: 'phone', header: 'Phone Number', render: (r) => r.phone },
-    { key: 'date', header: 'Date', render: (r) => r.date },
+    { key: 'date', header: 'Date', render: (r) => formatBookingDate(r.date) },
     { key: 'slot', header: 'Time Slot', render: (r) => r.timeSlot },
     { key: 'guests', header: 'Guests', align: 'center', render: (r) => r.guests },
     { key: 'occasion', header: 'Occasion Type', render: (r) => r.occasion },
@@ -220,8 +248,6 @@ export function ReservationsPage() {
                 icon={<Icon />}
                 label={s.label}
                 value={s.value}
-                delta={s.delta}
-                trend={s.trend}
                 caption={s.caption}
               />
             )
@@ -409,8 +435,13 @@ export function ReservationsPage() {
             </div>
 
             <ul className="border-t border-line">
+              {upcomingBookings.length === 0 && (
+                <li className="px-4 py-5 text-center text-[12px] text-ink-muted">
+                  No upcoming bookings.
+                </li>
+              )}
               {upcomingBookings.map((b) => (
-                <li key={b.time} className="flex gap-3 border-b border-line-soft px-4 py-3">
+                <li key={b.id} className="flex gap-3 border-b border-line-soft px-4 py-3">
                   <span className="w-[54px] shrink-0 pt-0.5 text-[12px] font-bold text-brand-600">
                     {b.time}
                   </span>

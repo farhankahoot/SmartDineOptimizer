@@ -7,10 +7,12 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import { api } from '@/lib/api'
 
 /**
- * System-wide switches only an administrator can change. Persisted so that a
- * maintenance window or a lockdown survives a page reload.
+ * System-wide switches only an administrator can change. These live on the
+ * server, so a maintenance window applies to every visitor rather than only to
+ * the browser that set it.
  */
 export interface SystemSettings {
   /** Takes the guest-facing site offline behind a maintenance notice. */
@@ -53,39 +55,60 @@ const defaults: SystemSettings = {
   readOnlyMode: false,
 }
 
-const STORAGE_KEY = 'smartdine.system'
-
-function read(): SystemSettings {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? { ...defaults, ...(JSON.parse(raw) as Partial<SystemSettings>) } : defaults
-  } catch {
-    return defaults
-  }
-}
-
 interface SystemValue {
   system: SystemSettings
-  update: (patch: Partial<SystemSettings>) => void
-  reset: () => void
+  /** True until the server's switches have been read. */
+  loading: boolean
+  update: (patch: Partial<SystemSettings>) => Promise<void>
+  reset: () => Promise<void>
+  refresh: () => Promise<void>
 }
 
 const SystemContext = createContext<SystemValue | null>(null)
 
+interface PublicConfig {
+  system: Partial<SystemSettings>
+}
+
 export function SystemProvider({ children }: { children: ReactNode }) {
-  const [system, setSystem] = useState<SystemSettings>(read)
+  const [system, setSystem] = useState<SystemSettings>(defaults)
+  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(system))
-  }, [system])
+  const refresh = useCallback(async () => {
+    // The public config is readable without a session and carries the guest
+    // switches; a super admin reading /platform/system gets the full set.
+    try {
+      const config = await api.get<PublicConfig>('/public/config')
+      setSystem((prev) => ({ ...prev, ...config.system }))
+    } catch {
+      // An unreachable API leaves the defaults in place rather than blanking
+      // the site — the pages still render, they just show seed-free state.
+    }
 
-  const update = useCallback((patch: Partial<SystemSettings>) => {
-    setSystem((prev) => ({ ...prev, ...patch }))
+    // Only a super admin can read the full switch set; everyone else keeps the
+    // public subset, so this is a probe rather than a hard requirement.
+    const full = await api.probe<{ system: SystemSettings }>('/platform/system')
+    if (full) setSystem((prev) => ({ ...prev, ...full.system }))
   }, [])
 
-  const reset = useCallback(() => setSystem(defaults), [])
+  useEffect(() => {
+    void refresh().finally(() => setLoading(false))
+  }, [refresh])
 
-  const value = useMemo(() => ({ system, update, reset }), [system, update, reset])
+  const update = useCallback(async (patch: Partial<SystemSettings>) => {
+    const { system: next } = await api.put<{ system: SystemSettings }>('/platform/system', patch)
+    setSystem(next)
+  }, [])
+
+  const reset = useCallback(async () => {
+    const { system: next } = await api.put<{ system: SystemSettings }>('/platform/system', defaults)
+    setSystem(next)
+  }, [])
+
+  const value = useMemo(
+    () => ({ system, loading, update, reset, refresh }),
+    [system, loading, update, reset, refresh],
+  )
   return <SystemContext.Provider value={value}>{children}</SystemContext.Provider>
 }
 

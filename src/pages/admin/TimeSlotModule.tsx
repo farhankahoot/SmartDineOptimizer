@@ -14,10 +14,15 @@ import {
   slotFilters,
   slotStatuses,
   slotTimeOptions,
-  timeSlotRows,
   type SlotStatus,
   type TimeSlotRow,
 } from '@/data/timeSlots'
+import { api, messageOf } from '@/lib/api'
+import { useApi } from '@/lib/useApi'
+
+interface SlotsPayload {
+  slots: (TimeSlotRow & { mealPeriod: string; dayOfWeek: string; booked: number | null })[]
+}
 
 const tone: Record<SlotStatus, BadgeTone> = {
   Open: 'open',
@@ -52,7 +57,10 @@ export function TimeSlotModule({ standalone = false }: { standalone?: boolean })
   const [day, setDay] = useState('Saturday')
   const [status, setStatus] = useState('All')
   const [meal, setMeal] = useState('All')
-  const [rows, setRows] = useState(timeSlotRows)
+  // Capacity is only meaningful for a specific day, so the filters are sent
+  // to the server rather than applied to a static list.
+  const slotsQuery = useApi<SlotsPayload>('/time-slots', { mealPeriod: meal })
+  const rows = slotsQuery.data?.slots ?? []
 
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<TimeSlotRow | null>(null)
@@ -85,7 +93,7 @@ export function TimeSlotModule({ standalone = false }: { standalone?: boolean })
     setFormOpen(true)
   }
 
-  const saveSlot = (e: React.FormEvent) => {
+  const saveSlot = async (e: React.FormEvent) => {
     e.preventDefault()
     const next: typeof errors = {}
     const max = Number(draft.maxReservations)
@@ -104,44 +112,40 @@ export function TimeSlotModule({ standalone = false }: { standalone?: boolean })
     if (Object.keys(next).length) return
 
     const label = `${draft.start} - ${draft.end}`
-    if (editing) {
-      setRows((prev) =>
-        prev.map((r) =>
-          r.id === editing.id
-            ? {
-                ...r,
-                slot: label,
-                start: draft.start,
-                end: draft.end,
-                maxReservations: max,
-                status: draft.status,
-              }
-            : r,
-        ),
-      )
-      push({ tone: 'success', title: 'Time slot updated', detail: label })
-    } else {
-      setRows((prev) => [
-        ...prev,
-        {
-          id: `S${prev.length + 1}`,
-          slot: label,
-          start: draft.start,
-          end: draft.end,
-          maxReservations: max,
-          availableTables: max,
-          status: draft.status,
-        },
-      ])
-      push({ tone: 'success', title: 'Time slot created', detail: label })
+    const body = {
+      slot: label,
+      start: draft.start,
+      end: draft.end,
+      maxReservations: max,
+      status: draft.status,
+      mealPeriod: draft.mealPeriod,
     }
-    setFormOpen(false)
+
+    try {
+      if (editing) {
+        await api.patch(`/time-slots/${editing.id}`, body)
+        push({ tone: 'success', title: 'Time slot updated', detail: label })
+      } else {
+        await api.post('/time-slots', body)
+        push({ tone: 'success', title: 'Time slot created', detail: label })
+      }
+      slotsQuery.refresh()
+      setFormOpen(false)
+    } catch (err) {
+      setErrors({ start: messageOf(err) })
+    }
   }
 
-  const toggleSlot = (row: TimeSlotRow) => {
+  const toggleSlot = async (row: TimeSlotRow) => {
     const next: SlotStatus = row.status === 'Closed' || row.status === 'Blocked' ? 'Open' : 'Closed'
-    setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, status: next } : r)))
-    push({ tone: 'info', title: `${row.slot} ${next === 'Open' ? 'opened' : 'closed'}` })
+    try {
+      await api.patch(`/time-slots/${row.id}`, { status: next })
+      push({ tone: 'info', title: `${row.slot} ${next === 'Open' ? 'opened' : 'closed'}` })
+      slotsQuery.refresh()
+    } catch (err) {
+      // Closing a slot that still holds live bookings is refused server-side.
+      push({ tone: 'error', title: `${row.slot} unchanged`, detail: messageOf(err) })
+    }
   }
 
   const columns: Column<TimeSlotRow>[] = [
@@ -356,12 +360,17 @@ export function TimeSlotModule({ standalone = false }: { standalone?: boolean })
       <ConfirmDialog
         open={removing !== null}
         title="Delete this time slot?"
-        message={`${removing?.slot ?? ''} will no longer be bookable. Existing reservations in this slot are not affected.`}
+        message={`${removing?.slot ?? ''} will no longer be bookable. A slot that still holds live reservations cannot be deleted — move or cancel them first.`}
         onCancel={() => setRemoving(null)}
-        onConfirm={() => {
+        onConfirm={async () => {
           if (removing) {
-            setRows((prev) => prev.filter((x) => x.id !== removing.id))
-            push({ tone: 'info', title: 'Time slot deleted', detail: removing.slot })
+            try {
+              await api.del(`/time-slots/${removing.id}`)
+              push({ tone: 'info', title: 'Time slot deleted', detail: removing.slot })
+              slotsQuery.refresh()
+            } catch (err) {
+              push({ tone: 'error', title: 'Time slot not deleted', detail: messageOf(err) })
+            }
           }
           setRemoving(null)
         }}

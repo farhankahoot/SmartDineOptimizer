@@ -4,10 +4,16 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently -n api,web -c magenta,cyan \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:web": "vite",
+    "dev:api": "npm --prefix server run dev",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit && npm --prefix server run lint",
+    "setup": "npm install && npm --prefix server install && npm --prefix server run db:push && npm --prefix server run db:seed",
+    "db:seed": "npm --prefix server run db:seed",
+    "db:reset": "npm --prefix server run db:reset",
+    "db:studio": "npm --prefix server run db:studio"
   },
   "dependencies": {
     "lucide-react": "^0.454.0",
@@ -22,6 +28,7 @@
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.3",
     "autoprefixer": "^10.4.20",
+    "concurrently": "^10.0.5",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.15",
     "typescript": "^5.6.3",
