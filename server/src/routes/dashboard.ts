@@ -188,6 +188,19 @@ dashboardRouter.get(
         getSetting('prediction.settings'),
       ])
 
+    // Module 6 FE-5 — food wastage and shortage alerts.
+    const [recentMetrics, seating, demandRow] = await Promise.all([
+      prisma.dailyMetric.findMany({ orderBy: { date: 'desc' }, take: 7 }),
+      prisma.restaurantTable.aggregate({
+        _sum: { seats: true },
+        where: { status: { notIn: ['Blocked', 'Unavailable'] } },
+      }),
+      prisma.predictionOutput.findFirst({
+        where: { kind: 'food-demand' },
+        orderBy: { generatedAt: 'desc' },
+      }),
+    ])
+
     const bookedBySlot = new Map(held.map((h) => [h.timeSlot, h._count._all]))
     const alerts: {
       id: string
@@ -283,6 +296,71 @@ dashboardRouter.get(
         }
       } catch {
         // A malformed prediction payload must not break the dashboard.
+      }
+    }
+
+    // Wastage is judged against the target the restaurant set, not a constant.
+    if (recentMetrics.length > 0) {
+      const avgWastage =
+        recentMetrics.reduce((n, m) => n + m.wastagePct, 0) / recentMetrics.length
+      const target = settings.wastageTargetPct
+
+      if (avgWastage >= target) {
+        alerts.push({
+          id: 'wastage',
+          tone: avgWastage >= target * 1.25 ? 'danger' : 'warn',
+          category: 'Food',
+          title: `Food wastage is ${avgWastage.toFixed(1)}%, above the ${target}% target`,
+          detail: 'Reduce prep volumes on the lowest-demand categories.',
+        })
+      } else {
+        alerts.push({
+          id: 'wastage-ok',
+          tone: 'success',
+          category: 'Food',
+          title: 'Wastage risk is under control',
+          detail: `Averaging ${avgWastage.toFixed(1)}% over 7 days, below the ${target}% target.`,
+        })
+      }
+    }
+
+    // Shortage risk: expected guests against what the room can actually serve.
+    const guestsExpected = await prisma.reservation.aggregate({
+      _sum: { guests: true },
+      where: { activeHold: 'held' },
+    })
+    const seats = seating._sum.seats ?? 0
+    const servable = seats * 2 * (1 + settings.shortageBufferPct / 100)
+    const expected = guestsExpected._sum.guests ?? 0
+
+    if (servable > 0 && expected >= servable * 0.85) {
+      alerts.push({
+        id: 'shortage',
+        tone: expected >= servable ? 'danger' : 'warn',
+        category: 'Food',
+        title: `Food shortage risk: ${expected} guests booked against capacity for ~${Math.round(servable)}`,
+        detail: `Prepare ${settings.shortageBufferPct}% above the usual volume for the busiest categories.`,
+      })
+    }
+
+    // Name the categories worth preparing more of, when a forecast exists.
+    if (demandRow) {
+      try {
+        const payload = JSON.parse(demandRow.payload) as {
+          demand?: { item: string; value: number }[]
+        }
+        const top = [...(payload.demand ?? [])].sort((a, b) => b.value - a.value).slice(0, 2)
+        if (top.length > 0) {
+          alerts.push({
+            id: 'demand',
+            tone: 'info',
+            category: 'Food',
+            title: `Highest predicted demand: ${top.map((d) => d.item).join(' and ')}`,
+            detail: 'Prioritise these in prep for the dinner service.',
+          })
+        }
+      } catch {
+        // A malformed payload must not break the dashboard.
       }
     }
 

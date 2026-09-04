@@ -121,6 +121,18 @@ predictionsRouter.get(
 
     const settings = await getSetting('prediction.settings')
 
+    // Module 5 FE-3 — wastage and shortage risk. Wastage compares the recent
+    // recorded wastage against the restaurant's own target; shortage compares
+    // predicted footfall against the capacity the roster and tables can serve,
+    // widened by the buffer the restaurant sets.
+    const [recent, seatingCapacity] = await Promise.all([
+      prisma.dailyMetric.findMany({ orderBy: { date: 'desc' }, take: 7 }),
+      prisma.restaurantTable.aggregate({
+        _sum: { seats: true },
+        where: { status: { notIn: ['Blocked', 'Unavailable'] } },
+      }),
+    ])
+
     const revenue = payloadFor('revenue') as { hourly?: { predicted: number }[] } | null
     const footfall = payloadFor('footfall') as {
       hourly?: { t: string; v: number }[]
@@ -141,6 +153,33 @@ predictionsRouter.get(
       0,
     ) ?? null
 
+    const avgWastage = recent.length
+      ? recent.reduce((n, m) => n + m.wastagePct, 0) / recent.length
+      : null
+
+    /** Wastage is a risk once it is at or above the target the admin set. */
+    const wastageRisk =
+      avgWastage === null
+        ? null
+        : avgWastage >= settings.wastageTargetPct * 1.25
+          ? 'High'
+          : avgWastage >= settings.wastageTargetPct
+            ? 'Medium'
+            : 'Low'
+
+    // Seats the room can turn over across the day, allowing two sittings per
+    // table, then padded by the shortage buffer.
+    const seats = seatingCapacity._sum.seats ?? 0
+    const servableGuests = seats * 2 * (1 + settings.shortageBufferPct / 100)
+    const shortageRisk =
+      expectedFootfall === null || servableGuests === 0
+        ? null
+        : expectedFootfall >= servableGuests
+          ? 'High'
+          : expectedFootfall >= servableGuests * 0.85
+            ? 'Medium'
+            : 'Low'
+
     res.json({
       scopeDate: scopeDate ?? null,
       predictedRevenue,
@@ -149,6 +188,12 @@ predictionsRouter.get(
       staffRequired,
       wastageTargetPct: settings.wastageTargetPct,
       shortageBufferPct: settings.shortageBufferPct,
+      /** Module 5 FE-3 — both derived, with the basis returned alongside. */
+      wastageRisk,
+      wastageAvgPct: avgWastage === null ? null : Number(avgWastage.toFixed(1)),
+      shortageRisk,
+      servableGuests: Math.round(servableGuests),
+      seatingCapacity: seats,
       /** Absent rather than invented when no model has run. */
       available: rows.length > 0,
     })

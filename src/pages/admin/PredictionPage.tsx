@@ -44,7 +44,6 @@ import {
   lowDemanded as fallbackLow,
   mlRecommendations as fallbackRecommendations,
   predictionFilters,
-  predictionStats,
   staffCards as fallbackStaffCards,
   staffGapAlert,
   topDemanded as fallbackTop,
@@ -63,6 +62,23 @@ import type {
  * stored. `model` records what produced the rows: "seed" means they are
  * fixtures, not the output of a trained model, and the banner says so.
  */
+/** Module 5 FE-1 to FE-5, reduced to the six headline figures. */
+interface SummaryPayload {
+  scopeDate: string | null
+  predictedRevenue: number | null
+  expectedFootfall: number | null
+  peakHour: string | null
+  staffRequired: number | null
+  wastageTargetPct: number
+  shortageBufferPct: number
+  wastageRisk: 'Low' | 'Medium' | 'High' | null
+  wastageAvgPct: number | null
+  shortageRisk: 'Low' | 'Medium' | 'High' | null
+  servableGuests: number
+  seatingCapacity: number
+  available: boolean
+}
+
 interface PredictionsPayload {
   scopeDate: string | null
   generatedAt: string | null
@@ -129,7 +145,87 @@ export function PredictionPage() {
   const [forecast, setForecast] = useState('All')
 
   const { data, loading } = useApi<PredictionsPayload>('/predictions')
+  const { data: summary } = useApi<SummaryPayload>('/predictions/summary')
   const out = data?.outputs ?? {}
+
+  /** How full the meter arc reads for each risk level. */
+  const riskTrack = (risk: string | null | undefined) =>
+    risk === 'High' ? 0.85 : risk === 'Medium' ? 0.55 : 0.25
+
+  const riskColour = (risk: string | null | undefined) =>
+    risk === 'High' ? '#C0392B' : risk === 'Medium' ? '#E8871E' : '#1E5B32'
+
+  const money = (n: number | null | undefined) =>
+    n === null || n === undefined ? '—' : `\u20A8 ${Math.round(n).toLocaleString('en-PK')}`
+
+  /**
+   * The six headline cards. Every value is computed by the API from stored
+   * forecasts, recorded wastage and real seating capacity — an unavailable
+   * figure shows an em dash rather than a placeholder number.
+   */
+  const predictionStats = [
+    {
+      key: 'revenue',
+      label: 'Predicted Revenue',
+      value: money(summary?.predictedRevenue),
+      caption: summary?.scopeDate ? `Forecast for ${summary.scopeDate}` : 'No forecast stored',
+      trend: 'up' as const,
+      color: '#7A1113',
+      icon: 'dollar' as const,
+    },
+    {
+      key: 'footfall',
+      label: 'Expected Footfall',
+      value: summary?.expectedFootfall?.toLocaleString('en-PK') ?? '—',
+      suffix: 'Guests',
+      caption: `Room serves about ${summary?.servableGuests ?? 0}`,
+      trend: 'up' as const,
+      color: '#7A1113',
+      icon: 'users' as const,
+    },
+    {
+      key: 'peak',
+      label: 'Peak Hour',
+      value: summary?.peakHour ?? '—',
+      caption: 'Highest predicted traffic',
+      trend: 'warn' as const,
+      color: '#FFFFFF',
+      icon: 'clock' as const,
+    },
+    {
+      key: 'shortage',
+      label: 'Food Shortage Risk',
+      value: summary?.shortageRisk ?? '—',
+      caption: `Footfall vs capacity +${summary?.shortageBufferPct ?? 0}% buffer`,
+      trend: 'warn' as const,
+      color: '#E8871E',
+      icon: 'alert' as const,
+      valueColor: riskColour(summary?.shortageRisk),
+    },
+    {
+      key: 'wastage',
+      label: 'Wastage Risk',
+      value: summary?.wastageRisk ?? '—',
+      caption:
+        summary?.wastageAvgPct !== null && summary?.wastageAvgPct !== undefined
+          ? `${summary.wastageAvgPct}% recorded vs ${summary.wastageTargetPct}% target`
+          : 'No wastage recorded',
+      trend: 'down' as const,
+      color: '#1E5B32',
+      icon: 'trash' as const,
+      valueColor: riskColour(summary?.wastageRisk),
+    },
+    {
+      key: 'staff',
+      label: 'Staff Requirement',
+      value: summary?.staffRequired?.toString() ?? '—',
+      suffix: 'Staff',
+      caption: 'Across all shifts',
+      trend: 'up' as const,
+      color: '#7A1113',
+      icon: 'users' as const,
+    },
+  ]
 
   // Every series falls back to the seeded fixture when that forecast kind has
   // not been generated, so the layout never collapses.
@@ -256,7 +352,7 @@ export function PredictionPage() {
                     style={{ color: s.valueColor ?? '#1B1B1F' }}
                   >
                     {s.value}
-                    {s.suffix && (
+                    {'suffix' in s && s.suffix && (
                       <span className="ml-1 text-[12px] font-semibold text-ink-soft">{s.suffix}</span>
                     )}
                   </p>
@@ -362,7 +458,11 @@ export function PredictionPage() {
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="text-[12px] font-bold text-ink">Food Shortage Risk</p>
-                      <RiskMeter level="Medium" color="#E8871E" track={0.55} />
+                      <RiskMeter
+                        level={summary?.shortageRisk ?? "—"}
+                        color={riskColour(summary?.shortageRisk)}
+                        track={riskTrack(summary?.shortageRisk)}
+                      />
                       <p className="mt-1.5 text-[10px] text-ink-muted">Monitor &amp; Plan Accordingly</p>
                     </div>
                   </Card>
@@ -373,7 +473,11 @@ export function PredictionPage() {
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="text-[12px] font-bold text-ink">Wastage Risk</p>
-                      <RiskMeter level="Low" color="#2E9E63" track={0.55} />
+                      <RiskMeter
+                        level={summary?.wastageRisk ?? "—"}
+                        color={riskColour(summary?.wastageRisk)}
+                        track={riskTrack(summary?.wastageRisk)}
+                      />
                       <p className="mt-1.5 text-[10px] text-ink-muted">Wastage Under Control</p>
                     </div>
                   </Card>
