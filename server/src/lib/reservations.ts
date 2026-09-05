@@ -4,8 +4,29 @@
  * entry points enforce the same thing.
  */
 import { prisma } from '../db.js'
-import { conflict } from './http.js'
+import { badRequest, conflict } from './http.js'
 import { getRules } from './settings.js'
+
+/**
+ * Booking dates are stored as ISO so they sort, group and compare correctly.
+ *
+ * Accepting a display string like "May 24, 2025" instead would put two formats
+ * in one column: availability checks would miss clashes between them, and the
+ * scheduler could not parse the slot time at all. The format is therefore
+ * rejected at the edge rather than tolerated.
+ */
+export const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
+
+export function assertIsoDate(date: string): void {
+  if (!ISO_DATE.test(date)) {
+    throw badRequest('Date must be in YYYY-MM-DD form.', {
+      date: 'Choose a date from the list.',
+    })
+  }
+  if (Number.isNaN(new Date(`${date}T00:00:00`).getTime())) {
+    throw badRequest('That is not a real date.', { date: 'Choose a valid date.' })
+  }
+}
 
 /** Statuses that hold a table. Anything else releases it (Module 3 FE-5). */
 export const LIVE_STATUSES = ['Pending', 'Confirmed', 'Updated'] as const
@@ -161,8 +182,8 @@ export async function assertRules(input: { guests: number; date: string }): Prom
     )
   }
 
+  assertIsoDate(input.date)
   const target = new Date(`${input.date}T00:00:00Z`)
-  if (Number.isNaN(target.getTime())) return
 
   const today = new Date()
   const todayUtc = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())

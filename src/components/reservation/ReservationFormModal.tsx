@@ -14,8 +14,11 @@ import {
 } from '@/data/reservations'
 import { adminFloorTables } from '@/data/tables'
 import { timeSlotRows } from '@/data/timeSlots'
+import { bookableDateOptions } from '@/lib/date'
 
-const dates = ['May 22, 2025', 'May 23, 2025', 'May 24, 2025', 'May 25, 2025', 'May 26, 2025']
+// Generated from today, so a manual booking can never carry a past date or a
+// format the booking rules cannot parse.
+const dates = bookableDateOptions()
 const times = ['12:30 PM', '1:00 PM', '1:30 PM', '6:30 PM', '7:00 PM', '7:30 PM', '8:00 PM', '8:30 PM', '9:00 PM', '9:30 PM']
 const tableIds = [...adminFloorTables.map((t) => t.id), 'A05', 'A07', 'A09', 'A12', 'B05', 'B07', 'B09', 'B11', 'B12', 'B14', 'C03', 'C05', 'C07', 'C08', 'D01', 'D02', 'D03']
 
@@ -37,7 +40,7 @@ const blank: Draft = {
   customerName: '',
   phone: '',
   email: '',
-  date: dates[0],
+  date: dates[0].value,
   timeSlot: '7:00 PM',
   guests: '2',
   occasion: occasionTypes[0],
@@ -227,7 +230,7 @@ export function ReservationFormModal({
             icon={<CalendarDays />}
             value={draft.date}
             onChange={(e) => set('date', e.target.value)}
-            options={dates.map((d) => ({ value: d, label: d }))}
+            options={dates}
           />
         </div>
 

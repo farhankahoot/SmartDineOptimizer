@@ -24,6 +24,12 @@ export interface StatCardProps {
   caption?: string
   delta?: string
   trend?: Trend
+  /**
+   * Set on metrics where a rise is bad news — cancellations, wastage. The
+   * arrow still shows the real direction; only the colour flips, so a 27% jump
+   * in cancellations does not read as a success.
+   */
+  invertSentiment?: boolean
   variant?: StatVariant
   /** Base hue for circleUp / pastel variants. */
   color?: string
@@ -39,13 +45,16 @@ export function StatCard({
   caption,
   delta,
   trend = 'up',
+  invertSentiment = false,
   variant = 'outline',
   color = '#7A1113',
   valueClassName,
   className,
 }: StatCardProps) {
+  // Direction drives the arrow; sentiment drives the colour.
+  const good = invertSentiment ? trend === 'down' : trend === 'up'
   const trendColor =
-    trend === 'down' ? 'text-state-danger' : trend === 'flat' ? 'text-ink-muted' : 'text-state-success'
+    trend === 'flat' ? 'text-ink-muted' : good ? 'text-state-success' : 'text-state-danger'
   const TrendIcon = trend === 'down' ? ArrowDown : ArrowUp
 
   if (variant === 'circleUp') {

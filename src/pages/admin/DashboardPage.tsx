@@ -123,9 +123,9 @@ export function DashboardPage() {
   /** Module 6 FE-1 - the five headline figures, straight from the database. */
   const kpiCards = kpis
     ? [
-        { key: 'total', label: 'Total Reservations', value: nf.format(kpis.totalReservations), delta: pct(kpis.totalReservationsDelta), trend: dir(kpis.totalReservationsDelta), caption: `in ${period.toLowerCase()}` },
+        { key: 'total', label: 'Total Reservations', value: nf.format(kpis.totalReservations), delta: pct(kpis.totalReservationsDelta), trend: dir(kpis.totalReservationsDelta), caption: period === 'Today' ? 'today' : `in the ${period.toLowerCase()}` },
         { key: 'confirmed', label: 'Confirmed Bookings', value: nf.format(kpis.confirmed), delta: pct(kpis.confirmedDelta), trend: dir(kpis.confirmedDelta), caption: 'vs previous period' },
-        { key: 'cancelled', label: 'Cancelled Bookings', value: nf.format(kpis.cancelled), delta: pct(kpis.cancelledDelta), trend: dir(kpis.cancelledDelta), caption: 'vs previous period' },
+        { key: 'cancelled', label: 'Cancelled Bookings', value: nf.format(kpis.cancelled), delta: pct(kpis.cancelledDelta), trend: dir(kpis.cancelledDelta), caption: 'vs previous period', invertSentiment: true },
         { key: 'available', label: 'Available Tables', value: nf.format(kpis.availableTables), caption: 'right now' },
         { key: 'booked', label: 'Booked Tables', value: nf.format(kpis.bookedTables), caption: 'right now' },
       ]
@@ -210,6 +210,7 @@ export function DashboardPage() {
                     value={k.value}
                     delta={k.delta}
                     trend={k.trend}
+                    invertSentiment={'invertSentiment' in k && k.invertSentiment}
                     caption={k.caption}
                   />
                 )

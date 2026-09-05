@@ -11,6 +11,16 @@ import { requirePermission } from '../middleware/auth.js'
 
 export const settingsRouter = Router()
 
+const DAYS = [
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+  'Sunday',
+] as const
+
 const view = requirePermission('view:settings')
 const manage = requirePermission('manage:settings')
 
@@ -60,22 +70,30 @@ settingsRouter.put(
   '/hours',
   manage,
   route(async (req, res) => {
+    // Opening hours are replaced wholesale, so a partial list would silently
+    // delete the missing days. The whole week must be sent.
     const { hours } = parse(
       z.object({
         hours: z
           .array(
             z.object({
-              day: z.string().trim().min(3),
+              day: z.enum(DAYS),
               open: z.string().trim().min(1),
               close: z.string().trim().min(1),
               closed: z.boolean(),
             }),
           )
-          .min(1)
-          .max(7),
+          .length(7, 'Send all seven days.'),
       }),
       req.body,
     )
+
+    const seen = new Set(hours.map((h) => h.day))
+    if (seen.size !== 7) {
+      throw badRequest('Each day must appear exactly once.', {
+        hours: 'Send all seven days, without duplicates.',
+      })
+    }
 
     await setSetting('restaurant.hours', hours)
     await audit({ actorId: req.user!.id, actorName: req.user!.name, action: 'Updated opening hours', target: 'Restaurant hours', category: 'System' })

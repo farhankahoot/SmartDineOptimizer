@@ -26,3 +26,34 @@ export function formatBookingDateLong(value: string): string {
     year: 'numeric',
   })
 }
+
+/**
+ * The dates a booking form may offer, starting today.
+ *
+ * Every booking form uses this so they cannot drift apart or offer a date the
+ * server will reject. Values are ISO because that is the format the booking
+ * rules parse and the column sorts on; the label is what the user reads.
+ */
+export function bookableDateOptions(days = 30, includeToday = true) {
+  const out: { value: string; label: string }[] = []
+
+  for (let i = includeToday ? 0 : 1; i <= days; i += 1) {
+    const d = new Date()
+    d.setDate(d.getDate() + i)
+    const value = toIsoDate(d)
+    const label = d.toLocaleDateString('en-GB', {
+      weekday: 'short',
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    })
+    out.push({ value, label: i === 0 ? `Today · ${label}` : label })
+  }
+
+  return out
+}
+
+/** Local-time ISO date. `toISOString()` would shift across the day in PKT. */
+export function toIsoDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}

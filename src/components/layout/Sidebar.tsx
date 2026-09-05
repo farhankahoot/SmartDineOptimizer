@@ -7,6 +7,19 @@ import { roleLabels } from '@/data/users'
 import { BrandLogo, GoldDivider } from './BrandLogo'
 import { SidebarArt } from './SidebarArt'
 
+/**
+ * The sidebar's date badge. Read once per page load rather than per render —
+ * a console left open overnight is refreshed by the next navigation, and this
+ * avoids re-formatting on every state change.
+ */
+const today = new Date()
+const todayLabel = today.toLocaleDateString('en-GB', {
+  day: '2-digit',
+  month: 'short',
+  year: 'numeric',
+})
+const weekdayLabel = today.toLocaleDateString('en-GB', { weekday: 'long' })
+
 export function Sidebar({
   mobileOpen,
   collapsed,
@@ -154,8 +167,8 @@ export function Sidebar({
             <CalendarDays className="size-[19px] shrink-0 text-gold-400" strokeWidth={1.8} />
             <div className={cn('min-w-0 leading-tight', collapsed && 'lg:hidden')}>
               <p className="text-[11px] font-bold text-gold-400">Today&apos;s Date</p>
-              <p className="text-[12.5px] font-semibold text-white">May 24, 2025</p>
-              <p className="text-[11px] text-white/70">Saturday</p>
+              <p className="text-[12.5px] font-semibold text-white">{todayLabel}</p>
+              <p className="text-[11px] text-white/70">{weekdayLabel}</p>
             </div>
           </div>
         </div>
