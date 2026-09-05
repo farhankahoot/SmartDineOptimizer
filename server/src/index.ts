@@ -45,9 +45,26 @@ app.disable('x-powered-by')
 app.use(securityHeaders)
 app.use(requireHttps)
 
+/**
+ * Allowed origins.
+ *
+ * Production is an exact allow-list — env.ts already refuses a wildcard or a
+ * plain-HTTP origin there. Development also accepts any localhost port,
+ * because Vite silently increments to 5174, 5175 … when its port is busy, and
+ * an API that only trusted one number would reject the app's own requests and
+ * look like a broken build rather than a port clash.
+ */
+const LOCALHOST = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/
+
 app.use(
   cors({
-    origin: env.origins,
+    origin(origin, callback) {
+      // Same-origin requests, curl and server-to-server calls send no Origin.
+      if (!origin) return callback(null, true)
+      if (env.origins.includes(origin)) return callback(null, true)
+      if (!env.isProd && LOCALHOST.test(origin)) return callback(null, true)
+      callback(null, false)
+    },
     credentials: true,
     // The browser may not read anything it was not explicitly offered.
     exposedHeaders: ['Content-Disposition'],
@@ -107,8 +124,20 @@ app.use(errorHandler)
 
 const server = app.listen(env.port, () => {
   console.log(`SmartDine API listening on http://localhost:${env.port}`)
-  console.log(`Allowing origins: ${env.origins.join(', ')}`)
+  console.log(`Allowing origins: ${env.origins.join(', ')}${env.isProd ? '' : ' (plus any localhost port)'}`)
   if (env.runScheduler) startScheduler()
+})
+
+server.on('error', (err: NodeJS.ErrnoException) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`
+Port ${env.port} is already in use — the API is probably running elsewhere.`)
+    console.error('Stop the other copy, or start this one on a different port:')
+    console.error(`  API_PORT=4001 npm run dev
+`)
+    process.exit(1)
+  }
+  throw err
 })
 
 /**

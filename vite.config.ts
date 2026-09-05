@@ -7,7 +7,13 @@ export default defineConfig({
   resolve: {
     alias: { '@': path.resolve(__dirname, './src') },
   },
-  server: { port: Number(process.env.PORT) || 5173 },
+  server: {
+    // 5199 is the project's dev port: it is what .claude/launch.json opens,
+    // what the README documents, and what the API's CLIENT_ORIGIN allows.
+    // Leaving this at Vite's 5173 default meant `npm run dev` from a plain
+    // terminal served the app on an origin the API refused.
+    port: Number(process.env.PORT) || 5199,
+  },
   build: {
     rollupOptions: {
       output: {
