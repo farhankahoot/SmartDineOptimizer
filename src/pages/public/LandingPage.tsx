@@ -1,65 +1,55 @@
-import { Suspense, lazy, useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ComponentType } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ArrowRight,
-  BellRing,
+  BarChart3,
+  Bell,
   Brain,
   CalendarDays,
   Check,
+  ChefHat,
   ChevronDown,
+  Clock,
   Database,
-  Gauge,
+  LayoutGrid,
   ListChecks,
   Minus,
-  Radio,
-  Shield,
   Sparkles,
   Tag,
   TrendingUp,
   Users,
   UtensilsCrossed,
-  Zap,
 } from 'lucide-react'
-import { cn } from '@/lib/cn'
-import { TableIcon } from '@/components/icons/TableIcon'
-import { Button } from '@/components/ui/Button'
-import { Card } from '@/components/ui/Card'
-import { Badge } from '@/components/ui/Badge'
-import { Skeleton } from '@/components/ui/States'
 import { LandingHeader } from '@/components/landing/LandingHeader'
 import { LandingFooter } from '@/components/landing/LandingFooter'
-import { FloorPlan, PrivateRoom, Wall } from '@/components/floorplan/FloorPlan'
-import { publicFloorTables } from '@/data/tables'
-import {
-  comparison,
-  faqs,
-  modules,
-  objectives,
-  problems,
-  techStack,
-  workflow,
-} from '@/data/landing'
-import { useSystem } from '@/store/SystemContext'
-import type { LandingContent } from '@/data/platform'
-import { usePlatform } from '@/store/PlatformContext'
+import { DashboardPreview } from '@/components/landing/ProductPreview'
 import { RestaurantShowcase } from '@/components/landing/RestaurantShowcase'
+import { Hero } from '@/components/landing/Hero'
+import { Reveal } from '@/components/landing/Reveal'
+import {
+  Eyebrow,
+  GlowCard,
+  IconTile,
+  Section,
+  SectionHeading,
+} from '@/components/landing/LandingPrimitives'
+import { TableIcon } from '@/components/icons/TableIcon'
+import { comparison, faqs, modules, problems, workflow } from '@/data/landing'
+import { useSystem } from '@/store/SystemContext'
+import { usePlatform } from '@/store/PlatformContext'
+import { cn } from '@/lib/cn'
 
-/** The chart-backed preview loads after first paint so the hero stays fast. */
-const DashboardPreview = lazy(() =>
-  import('@/components/landing/ProductPreview').then((m) => ({ default: m.DashboardPreview })),
-)
-
-const moduleIcons = {
-  calendar: CalendarDays,
-  listChecks: ListChecks,
-  table: TableIcon,
-  tag: Tag,
-  brain: Brain,
-  gauge: Gauge,
-  database: Database,
-  shield: Shield,
-}
-
+/**
+ * The public landing page.
+ *
+ * Rebuilt from twelve sections to eight. The previous version argued the same
+ * point twice — a "problem" band and a "why not a plain booking form" band —
+ * and carried a "project targets" strip that read like a proposal slide rather
+ * than something a guest or restaurant owner would read. Those claims all
+ * survive: the targets became the hero's proof line, and the two argument
+ * sections merged into one, so the page is roughly a third shorter without
+ * dropping a single claim.
+ */
 export function LandingPage() {
   const { system } = useSystem()
   const { landing, isFeatureOn } = usePlatform()
@@ -101,11 +91,11 @@ export function LandingPage() {
 
       <main id="main">
         <Hero bookingOpen={bookingOpen} content={landing} />
-        <ProductShowcase />
-        <ProblemSection />
-        <ObjectivesStrip />
-        <FeatureGrid />
-        <HowItWorks />
+        <ConsolePreview />
+        <WhyItExists />
+        <ModuleGrid />
+        <PredictionBand />
+        <GuestFlow bookingOpen={bookingOpen} />
         {isFeatureOn('Restaurant showcase') && (
           <RestaurantShowcase
             eyebrow={landing.showcaseEyebrow}
@@ -113,11 +103,7 @@ export function LandingPage() {
             lead={landing.showcaseLead}
           />
         )}
-        <AnalyticsSection />
-        <GuestExperience />
-        <ComparisonSection />
-        <FaqSection />
-        <FinalCta bookingOpen={bookingOpen} content={landing} />
+        <ClosingSection bookingOpen={bookingOpen} content={landing} />
       </main>
 
       <LandingFooter />
@@ -136,597 +122,433 @@ function setMeta(name: string, content: string, property = false) {
   tag.setAttribute('content', content)
 }
 
-/* -------------------------------------------------------------------- hero */
+/* ------------------------------------------------------------- 2. preview */
 
-function Hero({ bookingOpen, content }: { bookingOpen: boolean; content: LandingContent }) {
+/**
+ * The console, lifted into the hero's shadow.
+ *
+ * Negative top margin pulls it over the dark hero so the two read as one
+ * composition rather than as a band followed by another band.
+ */
+function ConsolePreview() {
   return (
-    <section className="relative overflow-hidden bg-[#0C0C0E]">
-      <div
-        className="absolute inset-0"
-        aria-hidden="true"
-        style={{
-          backgroundImage:
-            'radial-gradient(70% 60% at 18% 0%, rgba(122,17,19,.55) 0%, transparent 62%), radial-gradient(55% 55% at 88% 20%, rgba(212,165,55,.18) 0%, transparent 60%)',
-        }}
-      />
-      <div
-        className="absolute inset-0 opacity-[0.04]"
-        aria-hidden="true"
-        style={{
-          backgroundImage:
-            'linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)',
-          backgroundSize: '56px 56px',
-        }}
-      />
-
-      <div className="relative mx-auto max-w-[1240px] px-5 pb-16 pt-14 sm:pt-20 lg:pb-24">
-        <div className="mx-auto max-w-[860px] text-center">
-          <span className="inline-flex items-center gap-2 rounded-full border border-gold-600/40 bg-white/[0.04] px-3.5 py-1.5 text-[11.5px] font-semibold text-gold-300">
-            <Sparkles className="size-[13px]" />
-            {content.heroBadge}
-          </span>
-
-          <h1 className="mt-5 text-[34px] font-extrabold leading-[1.08] tracking-[-0.03em] text-white sm:text-[48px] lg:text-[58px]">
-            {content.heroTitleTop}
-            <br />
-            <span className="text-gold-300">{content.heroTitleAccent}</span>
-          </h1>
-
-          <p className="mx-auto mt-5 max-w-[620px] text-[15px] leading-relaxed text-white/75 sm:text-[16.5px]">
-            {content.heroSubtitle}
-          </p>
-
-          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Link to={bookingOpen ? '/reserve' : '/track'} className="w-full sm:w-auto">
-              <Button size="lg" block rightIcon={<ArrowRight className="size-[17px]" />}>
-                {bookingOpen ? content.primaryCtaLabel : 'Track a booking'}
-              </Button>
-            </Link>
-            <a href="#product" className="w-full sm:w-auto">
-              <Button
-                size="lg"
-                block
-                variant="outlineNeutral"
-                className="border-white/25 bg-white/[0.04] text-white hover:bg-white/10"
-              >
-                {content.secondaryCtaLabel}
-              </Button>
-            </a>
+    <section id="product" className="relative -mt-16 px-5 pb-16 lg:-mt-24 lg:pb-20">
+      <div className="mx-auto max-w-[1180px]">
+        <Reveal variant="scale">
+          <div className="relative">
+            {/* Glow beneath the frame, tying it to the hero above. */}
+            <div
+              aria-hidden="true"
+              className="absolute inset-x-8 -bottom-6 -z-10 h-24 rounded-[40px] bg-brand-700/20 blur-3xl"
+            />
+            <DashboardPreview />
           </div>
+        </Reveal>
 
-          <ul className="mx-auto mt-8 flex max-w-[640px] flex-wrap items-center justify-center gap-x-6 gap-y-2.5">
-            {[
-              { icon: Zap, label: 'Book in 1–2 minutes' },
-              { icon: Radio, label: 'Live table availability' },
-              { icon: BellRing, label: 'Automatic confirmations' },
-            ].map(({ icon: Icon, label }) => (
-              <li key={label} className="flex items-center gap-2 text-[12.5px] text-white/70">
-                <Icon className="size-[14px] text-gold-400" strokeWidth={2.2} />
-                {label}
-              </li>
-            ))}
-          </ul>
-        </div>
+        <Reveal delay={140}>
+          <p className="mt-5 text-center text-[11.5px] text-ink-faint">
+            A preview of the operations dashboard. Figures shown are sample data.
+          </p>
+        </Reveal>
       </div>
     </section>
   )
 }
 
-/* --------------------------------------------------------- product preview */
+/* -------------------------------------------------------- 3. why it exists */
 
-function ProductShowcase() {
+/**
+ * The problem and the capability gap, together.
+ *
+ * These were two separate full-height sections making the same argument. Side
+ * by side they argue it once and better: what goes wrong on the left, what a
+ * typical restaurant site does about it on the right.
+ */
+function WhyItExists() {
   return (
-    <section id="product" className="relative -mt-10 pb-16 lg:-mt-16 lg:pb-24">
-      <div className="mx-auto max-w-[1180px] px-5">
-        <Suspense
-          fallback={
-            <div className="overflow-hidden rounded-[14px] border border-line bg-white p-4 shadow-panel">
-              <Skeleton className="h-[380px] w-full" />
+    <Section tone="cream">
+      <SectionHeading
+        eyebrow="Why it exists"
+        title="Manual reservations cost more than they look"
+        lead="Restaurants serving family dinners, birthdays and business dinners still take bookings by phone, WhatsApp and paper. The cost shows up as double bookings, idle tables and food thrown away."
+        align="center"
+      />
+
+      <div className="mt-12 grid gap-8 lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-10">
+        <ul className="grid gap-3.5 sm:grid-cols-2">
+          {problems.map((p, i) => (
+            <Reveal key={p.title} delay={i * 80} as="li">
+              <GlowCard className="h-full">
+                <span className="text-[11px] font-bold tabular-nums text-brand-300">
+                  {String(i + 1).padStart(2, '0')}
+                </span>
+                <h3 className="mt-2 text-[15px] font-bold leading-snug text-ink">{p.title}</h3>
+                <p className="mt-2 text-[12.5px] leading-relaxed text-ink-muted">{p.detail}</p>
+              </GlowCard>
+            </Reveal>
+          ))}
+        </ul>
+
+        {/* What a typical restaurant site covers, and what it does not. */}
+        <Reveal delay={180} variant="right">
+          <div className="overflow-hidden rounded-[16px] border border-line bg-white shadow-card">
+            <div className="border-b border-line px-5 py-4">
+              <Eyebrow>The gap</Eyebrow>
+              <p className="mt-2 text-[13.5px] font-bold text-ink">
+                A booking form collects details. It does not run the service.
+              </p>
             </div>
-          }
-        >
-          <DashboardPreview />
-        </Suspense>
 
-        <p className="mx-auto mt-5 max-w-[620px] text-center text-[13px] text-ink-muted">
-          The live operations dashboard — KPI cards, footfall and revenue trends, peak-hour
-          utilisation and operational alerts, updated as bookings arrive.
-        </p>
-      </div>
-    </section>
-  )
-}
+            <ul className="divide-y divide-line-soft">
+              {comparison.map((row) => (
+                <li key={row.capability} className="flex items-center gap-3 px-5 py-2.5">
+                  <span
+                    className={cn(
+                      'flex size-[18px] shrink-0 items-center justify-center rounded-full',
+                      row.typical ? 'bg-state-successBg' : 'bg-line-soft',
+                    )}
+                  >
+                    {row.typical ? (
+                      <Check className="size-[11px] text-state-success" strokeWidth={3} />
+                    ) : (
+                      <Minus className="size-[11px] text-ink-faint" strokeWidth={3} />
+                    )}
+                  </span>
+                  <span className="flex-1 text-[12.5px] leading-snug text-ink-soft">
+                    {row.capability}
+                  </span>
+                  <Check className="size-[14px] shrink-0 text-brand-700" strokeWidth={3} />
+                </li>
+              ))}
+            </ul>
 
-/* ----------------------------------------------------------------- problem */
-
-function ProblemSection() {
-  return (
-    <Section
-      eyebrow="The problem"
-      title="Manual reservations cost more than they look"
-      lead="Restaurants serving family dinners, birthdays and business dinners still take bookings by phone, WhatsApp and walk-in. The details get captured — the operations do not."
-    >
-      <div className="grid gap-3.5 sm:grid-cols-2">
-        {problems.map((p, i) => (
-          <Card key={p.title} className="p-5">
-            <span className="flex size-8 items-center justify-center rounded-[9px] bg-brand-50 text-[12px] font-bold text-brand-700">
-              {String(i + 1).padStart(2, '0')}
-            </span>
-            <h3 className="mt-3.5 text-[15px] font-bold text-ink">{p.title}</h3>
-            <p className="mt-1.5 text-[13px] leading-relaxed text-ink-muted">{p.detail}</p>
-          </Card>
-        ))}
+            <div className="flex items-center justify-between gap-3 border-t border-line bg-page px-5 py-3">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-faint">
+                Typical site
+              </span>
+              <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-brand-700">
+                SmartDine
+              </span>
+            </div>
+          </div>
+        </Reveal>
       </div>
     </Section>
   )
 }
 
-/* -------------------------------------------------------------- objectives */
+/* --------------------------------------------------------- 4. module grid */
 
-function ObjectivesStrip() {
-  return (
-    <section className="border-y border-line bg-white py-12">
-      <div className="mx-auto max-w-[1240px] px-5">
-        <p className="text-center text-[12px] font-bold uppercase tracking-[0.08em] text-brand-700">
-          Project targets
-        </p>
-        <h2 className="mx-auto mt-2 max-w-[560px] text-center text-[22px] font-extrabold tracking-[-0.02em] text-ink sm:text-[26px]">
-          The outcomes the system is being built and measured against
-        </h2>
+type IconComponent = ComponentType<{ strokeWidth?: string | number; className?: string }>
 
-        <dl className="mt-8 grid gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
-          {objectives.map((o) => (
-            <div key={o.label} className="rounded-card border border-line bg-page px-4 py-5">
-              <dt className="text-[26px] font-extrabold leading-none tracking-[-0.02em] text-brand-700">
-                {o.metric}
-              </dt>
-              <dd className="mt-2 text-[13px] font-semibold text-ink">{o.label}</dd>
-              <p className="mt-2 text-[11.5px] leading-relaxed text-ink-muted">{o.note}</p>
-            </div>
-          ))}
-        </dl>
-
-        <p className="mx-auto mt-6 max-w-[640px] text-center text-[11.5px] text-ink-faint">
-          These are the project&apos;s stated objectives and pilot-testing targets, not measured
-          results from live restaurants.
-        </p>
-      </div>
-    </section>
-  )
+const moduleIcons: Record<string, IconComponent> = {
+  calendar: CalendarDays,
+  listChecks: ListChecks,
+  table: TableIcon,
+  tag: Tag,
+  brain: Brain,
+  chart: BarChart3,
+  database: Database,
+  users: Users,
 }
 
-/* ---------------------------------------------------------------- features */
-
-function FeatureGrid() {
+function ModuleGrid() {
   return (
-    <Section
-      id="features"
-      eyebrow="What's inside"
-      title="Eight modules, one connected system"
-      lead="Every part of the platform writes to the same database, so a booking taken at the front desk immediately changes table availability, the dashboard and tomorrow's forecast."
-    >
-      <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
-        {modules.map((m) => {
-          const Icon = moduleIcons[m.icon]
+    <Section id="modules">
+      <SectionHeading
+        eyebrow="What's inside"
+        title="Eight modules, one connected system"
+        lead="Every part writes to the same database, so a booking taken at the front desk changes the floor plan, the forecast and tonight's staffing plan at the same moment."
+        align="center"
+      />
+
+      <ul className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {modules.map((m, i) => {
+          const Icon = moduleIcons[m.icon] ?? LayoutGrid
           return (
-            <Card
-              key={m.id}
-              className="group p-5 transition duration-200 hover:-translate-y-0.5 hover:shadow-panel motion-reduce:transform-none motion-reduce:transition-none"
-            >
-              <span className="flex size-10 items-center justify-center rounded-[10px] bg-brand-50 text-brand-700 transition group-hover:bg-brand-700 group-hover:text-white">
-                <Icon className="size-[19px]" strokeWidth={1.9} />
-              </span>
-              <h3 className="mt-4 text-[14.5px] font-bold text-ink">{m.title}</h3>
-              <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-muted">{m.detail}</p>
-            </Card>
+            <Reveal key={m.id} delay={(i % 4) * 70} as="li">
+              <GlowCard className="h-full">
+                <IconTile>
+                  <Icon strokeWidth={2} />
+                </IconTile>
+                <h3 className="mt-3.5 text-[14.5px] font-bold leading-snug text-ink">{m.title}</h3>
+                <p className="mt-2 text-[12.5px] leading-relaxed text-ink-muted">{m.detail}</p>
+                {/* Rule that draws itself in on hover. */}
+                <span
+                  aria-hidden="true"
+                  className="mt-4 block h-[2px] w-0 rounded-full bg-gradient-to-r from-brand-700 to-gold-400 motion-safe:transition-all motion-safe:duration-500 group-hover:w-12"
+                />
+              </GlowCard>
+            </Reveal>
           )
         })}
-      </div>
+      </ul>
     </Section>
   )
 }
 
-/* ------------------------------------------------------------ how it works */
+/* ---------------------------------------------------- 5. prediction band */
 
-function HowItWorks() {
-  return (
-    <Section
-      id="how-it-works"
-      eyebrow="How it works"
-      title="From set-up to a planned service"
-      lead="The system is plug-and-play: configure the restaurant once, then run reservations and operations from the same console."
-      tone="white"
-    >
-      <ol className="grid gap-3.5 lg:grid-cols-4">
-        {workflow.map((w) => (
-          <li key={w.step} className="relative">
-            <Card className="h-full p-5">
-              <span className="text-[26px] font-extrabold leading-none tracking-[-0.02em] text-gold-400">
-                {w.step}
-              </span>
-              <h3 className="mt-3 text-[14.5px] font-bold text-ink">{w.title}</h3>
-              <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-muted">{w.detail}</p>
-              <Link
-                to={w.to}
-                className="focus-ring mt-3.5 inline-flex items-center gap-1.5 rounded text-[12px] font-bold text-brand-700 transition hover:gap-2.5"
-              >
-                {w.linkLabel}
-                <ArrowRight className="size-[13px]" />
-              </Link>
-            </Card>
-          </li>
-        ))}
-      </ol>
-    </Section>
-  )
-}
-
-/* --------------------------------------------------------------- analytics */
-
-const predictions = [
-  { icon: Users, title: 'Footfall prediction', detail: 'Expected guests for a chosen day, date and time slot.' },
-  { icon: TrendingUp, title: 'Revenue prediction', detail: 'Forecast revenue from reservations, party size, occasion and deal selection.' },
-  { icon: UtensilsCrossed, title: 'Food demand & risk', detail: 'Predicted demand per item, with wastage and shortage risk flagged early.' },
-  { icon: Users, title: 'Employee requirement', detail: 'Chefs, serving and cleaning staff needed per shift against expected flow.' },
-  { icon: CalendarDays, title: 'Peak-hour detection', detail: 'The slots that will fill first, for table, food and staff planning.' },
-  { icon: Gauge, title: 'Sales forecasting', detail: 'Forward sales trends for business planning and reporting.' },
+const forecasts: { title: string; detail: string; icon: IconComponent }[] = [
+  { title: 'Customer footfall', detail: 'Expected guests per day, date and time slot.', icon: Users },
+  { title: 'Revenue', detail: 'Projected takings from reservations and sales history.', icon: TrendingUp },
+  { title: 'Food demand', detail: 'What to prepare, with wastage and shortage risk.', icon: UtensilsCrossed },
+  { title: 'Employee requirement', detail: 'Chefs, serving and cleaning staff per shift.', icon: ChefHat },
+  { title: 'Peak hours', detail: 'The slots that will fill, before they fill.', icon: Clock },
+  { title: 'Sales forecast', detail: 'Daily and weekly outlook for planning ahead.', icon: BarChart3 },
 ]
 
-function AnalyticsSection() {
+function PredictionBand() {
   return (
-    <section id="analytics" className="relative overflow-hidden bg-[#0C0C0E] py-16 lg:py-24">
+    <Section tone="dark" id="analytics">
+      {/* Same aurora language as the hero, quieter. */}
       <div
-        className="absolute inset-0"
         aria-hidden="true"
-        style={{
-          backgroundImage:
-            'radial-gradient(60% 55% at 85% 10%, rgba(122,17,19,.5) 0%, transparent 62%), radial-gradient(45% 45% at 10% 90%, rgba(212,165,55,.14) 0%, transparent 60%)',
-        }}
+        className="pointer-events-none absolute -right-[10%] top-[-20%] -z-0 size-[520px] rounded-full bg-[radial-gradient(circle,rgba(122,17,19,.42),transparent_66%)] blur-[80px] motion-safe:animate-aurora"
       />
 
-      <div className="relative mx-auto max-w-[1240px] px-5">
-        <div className="mx-auto max-w-[680px] text-center">
-          <p className="text-[12px] font-bold uppercase tracking-[0.08em] text-gold-400">
-            Predictive operations
-          </p>
-          <h2 className="mt-2.5 text-[26px] font-extrabold tracking-[-0.025em] text-white sm:text-[34px]">
-            Six forecasts that turn bookings into a plan
-          </h2>
-          <p className="mt-4 text-[14.5px] leading-relaxed text-white/70">
-            Models trained on reservation, sales, food-usage and staffing history surface what
-            tonight will look like — and the dashboard turns each one into an alert or a
-            recommendation you can act on.
-          </p>
-        </div>
-
-        <ul className="mt-10 grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
-          {predictions.map(({ icon: Icon, title, detail }) => (
-            <li
-              key={title}
-              className="rounded-card border border-white/10 bg-white/[0.04] p-5 transition hover:border-gold-600/40 hover:bg-white/[0.07]"
-            >
-              <span className="flex size-9 items-center justify-center rounded-[9px] border border-gold-600/40 text-gold-400">
-                <Icon className="size-[17px]" strokeWidth={1.9} />
-              </span>
-              <h3 className="mt-3.5 text-[14px] font-bold text-white">{title}</h3>
-              <p className="mt-1.5 text-[12.5px] leading-relaxed text-white/65">{detail}</p>
-            </li>
-          ))}
-        </ul>
-
-        <div className="mt-10 rounded-card border border-white/10 bg-white/[0.03] px-5 py-5 text-center">
-          <p className="text-[12.5px] text-white/70">
-            <span className="font-bold text-white">Decision support, not autopilot.</span> Forecasts
-            are suggestions — the restaurant keeps every final call on reservations, food
-            preparation, staffing and planning.
-          </p>
-        </div>
-
-        <ul className="mt-8 flex flex-wrap items-center justify-center gap-2">
-          {techStack.map((t) => (
-            <li
-              key={t}
-              className="rounded-full border border-white/12 px-3 py-1 text-[11px] font-medium text-white/55"
-            >
-              {t}
-            </li>
-          ))}
-        </ul>
-      </div>
-    </section>
-  )
-}
-
-/* --------------------------------------------------------- guest experience */
-
-function GuestExperience() {
-  return (
-    <Section
-      eyebrow="For your guests"
-      title="Pick a table, not a time and a hope"
-      lead="Guests see the real floor plan, choose where they want to sit, and get a booking reference they can check at any time — no account required."
-      tone="white"
-    >
-      <div className="grid items-center gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
+      <div className="relative grid gap-10 lg:grid-cols-[minmax(0,440px)_minmax(0,1fr)] lg:gap-14">
         <div>
-          <ul className="grid gap-4">
-            {[
-              {
-                icon: TableIcon,
-                title: 'Live table layout',
-                detail:
-                  'Available, reserved, selected and unavailable tables are colour-coded on the actual restaurant plan.',
-              },
-              {
-                icon: ListChecks,
-                title: 'Everything captured up front',
-                detail:
-                  'Date, time slot, party size, occasion type, seating preference and special requests — collected in one form.',
-              },
-              {
-                icon: BellRing,
-                title: 'Confirmation and reminders',
-                detail:
-                  'Email, SMS or WhatsApp messages go out when a booking is approved, updated or cancelled.',
-              },
-              {
-                icon: Shield,
-                title: 'Status you can check yourself',
-                detail:
-                  'A booking reference shows whether the request is pending, confirmed, updated, rejected or cancelled.',
-              },
-            ].map(({ icon: Icon, title, detail }) => (
-              <li key={title} className="flex gap-3.5">
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-[9px] bg-brand-50 text-brand-700">
-                  <Icon className="size-[17px]" strokeWidth={1.9} />
+          <SectionHeading
+            eyebrow="Predictive operations"
+            tone="dark"
+            title="Six forecasts that turn bookings into a plan"
+            lead="Models learn from reservation, sales, food-usage and staffing history to surface what tonight and next week will look like — while there is still time to act."
+          />
+
+          <Reveal delay={160}>
+            <div className="mt-7 rounded-[14px] border border-gold-400/25 bg-gold-400/[0.06] p-4">
+              <p className="flex items-start gap-2.5 text-[12.5px] leading-relaxed text-gold-200/90">
+                <Sparkles className="mt-0.5 size-[15px] shrink-0 text-gold-400" strokeWidth={2} />
+                <span>
+                  Forecasts are decision support. The restaurant keeps every final call on
+                  reservations, food preparation and staffing.
                 </span>
-                <div>
-                  <h3 className="text-[14px] font-bold text-ink">{title}</h3>
-                  <p className="mt-1 text-[12.5px] leading-relaxed text-ink-muted">{detail}</p>
+              </p>
+            </div>
+          </Reveal>
+        </div>
+
+        <ul className="grid gap-3.5 sm:grid-cols-2">
+          {forecasts.map((f, i) => (
+            <Reveal key={f.title} delay={i * 70} as="li">
+              <GlowCard tone="dark" className="h-full">
+                <div className="flex items-start gap-3">
+                  <IconTile tone="dark" className="size-[34px] [&>svg]:size-[16px]">
+                    <f.icon strokeWidth={2} />
+                  </IconTile>
+                  <div className="min-w-0">
+                    <h3 className="text-[13.5px] font-bold text-white">{f.title}</h3>
+                    <p className="mt-1 text-[12px] leading-relaxed text-white/55">{f.detail}</p>
+                  </div>
                 </div>
-              </li>
-            ))}
-          </ul>
-
-          <div className="mt-7 flex flex-wrap gap-2.5">
-            <Link to="/reserve">
-              <Button rightIcon={<ArrowRight className="size-[15px]" />}>Try the booking page</Button>
-            </Link>
-            <Link to="/track">
-              <Button variant="outline">Track a booking</Button>
-            </Link>
-          </div>
-        </div>
-
-        <div className="rounded-[14px] border border-line bg-white p-4 shadow-panel">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <p className="text-[13px] font-extrabold text-ink">Select Your Preferred Table</p>
-            <span className="flex items-center gap-1.5 text-[10.5px] text-ink-muted">
-              <span className="size-[6px] rounded-full bg-state-success" />
-              Live availability
-            </span>
-          </div>
-
-          <ul className="mb-3 flex flex-wrap gap-1.5">
-            {[
-              ['Available', '#4CAF50'],
-              ['Reserved', '#D64545'],
-              ['Selected', '#D9A441'],
-              ['Unavailable', '#B4B2AE'],
-            ].map(([label, color]) => (
-              <li
-                key={label}
-                className="inline-flex items-center gap-1.5 rounded-[7px] border border-line px-2 py-1"
-              >
-                <span className="size-[9px] rounded-[3px]" style={{ background: color }} />
-                <span className="text-[10.5px] font-medium text-ink-soft">{label}</span>
-              </li>
-            ))}
-          </ul>
-
-          <FloorPlan variant="guest" tables={publicFloorTables} aspect="58%">
-            <Wall style={{ left: '0%', top: '6%', width: '41%', height: '1.6%' }} />
-            <Wall style={{ left: '52.5%', top: '6%', width: '47.5%', height: '1.6%' }} />
-            <Wall style={{ left: '58.5%', top: '30%', width: '0.9%', height: '46%' }} />
-            <PrivateRoom style={{ left: '60%', top: '66%', width: '39%', height: '34%' }} />
-          </FloorPlan>
-
-          <div className="mt-3 flex items-center gap-2.5 rounded-[9px] border border-line bg-[#FDFBF7] px-3 py-2.5">
-            <Badge tone="selected">Selected</Badge>
-            <span className="text-[12.5px] font-bold text-ink">Table T12</span>
-            <span className="text-[11.5px] text-ink-muted">4 Seater · Indoor · Near Window</span>
-          </div>
-        </div>
+              </GlowCard>
+            </Reveal>
+          ))}
+        </ul>
       </div>
     </Section>
   )
 }
 
-/* -------------------------------------------------------------- comparison */
+/* ------------------------------------------------------- 6. the guest flow */
 
-function ComparisonSection() {
+function GuestFlow({ bookingOpen }: { bookingOpen: boolean }) {
   return (
-    <Section
-      eyebrow="Why not a plain booking form"
-      title="What a typical restaurant website leaves out"
-      lead="Local restaurant sites collect booking details. SmartDine Optimizer manages the reservation and everything the reservation affects."
-    >
-      <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[560px] border-collapse text-left">
-            <caption className="sr-only">
-              Capability comparison between a typical restaurant booking form and SmartDine
-              Optimizer
-            </caption>
-            <thead>
-              <tr className="border-b border-line">
-                <th scope="col" className="px-4 py-3.5 text-[12px] font-bold text-ink">
-                  Capability
-                </th>
-                <th scope="col" className="px-4 py-3.5 text-center text-[12px] font-bold text-ink-muted">
-                  Typical booking form
-                </th>
-                <th scope="col" className="px-4 py-3.5 text-center text-[12px] font-bold text-brand-700">
-                  SmartDine Optimizer
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {comparison.map((row) => (
-                <tr key={row.capability} className="border-b border-line-soft last:border-0">
-                  <td className="px-4 py-3 text-[12.5px] text-ink-soft">{row.capability}</td>
-                  <td className="px-4 py-3 text-center">
-                    {row.typical ? (
-                      <Check className="mx-auto size-[16px] text-state-success" aria-label="Yes" />
-                    ) : (
-                      <Minus className="mx-auto size-[16px] text-ink-faint" aria-label="No" />
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <Check className="mx-auto size-[16px] text-state-success" aria-label="Yes" />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+    <Section tone="cream">
+      <SectionHeading
+        eyebrow="How it works"
+        title="From set-up to a planned service"
+        lead="Plug-and-play: configure the restaurant once, then run reservations and operations from the same console."
+        align="center"
+      />
+
+      <ol className="mt-12 grid gap-4 lg:grid-cols-4">
+        {workflow.map((step, i) => (
+          <Reveal key={step.step} delay={i * 90} as="li">
+            <GlowCard className="h-full">
+              <div className="flex items-center gap-3">
+                <span className="flex size-[34px] shrink-0 items-center justify-center rounded-full bg-brand-700 text-[12px] font-extrabold text-white">
+                  {step.step}
+                </span>
+                {/* Connector, hidden on the last card and on narrow screens. */}
+                {i < workflow.length - 1 && (
+                  <span
+                    aria-hidden="true"
+                    className="hidden h-px flex-1 bg-gradient-to-r from-brand-200 to-transparent lg:block"
+                  />
+                )}
+              </div>
+              <h3 className="mt-3.5 text-[14.5px] font-bold leading-snug text-ink">{step.title}</h3>
+              <p className="mt-2 text-[12.5px] leading-relaxed text-ink-muted">{step.detail}</p>
+              <Link
+                to={step.to}
+                className="mt-3.5 inline-flex items-center gap-1.5 text-[12px] font-bold text-brand-700 transition hover:gap-2.5 hover:text-brand-bright"
+              >
+                {step.linkLabel}
+                <ArrowRight className="size-[13px]" />
+              </Link>
+            </GlowCard>
+          </Reveal>
+        ))}
+      </ol>
+
+      {/* What the guest actually gets, ending on the booking CTA. */}
+      <Reveal delay={200}>
+        <div className="mt-10 overflow-hidden rounded-[18px] border border-line bg-white shadow-card">
+          <div className="grid gap-8 p-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-center lg:p-8">
+            <div>
+              <Eyebrow>For your guests</Eyebrow>
+              <h3 className="mt-3 text-[22px] font-extrabold leading-tight tracking-[-0.02em] text-ink sm:text-[26px]">
+                Pick a table, not a time and a hope
+              </h3>
+              <p className="mt-3 max-w-[520px] text-[13.5px] leading-relaxed text-ink-muted">
+                Guests see the real floor plan, choose where they want to sit, and get a booking
+                reference they can track — pending, confirmed, updated or cancelled — without
+                calling anyone.
+              </p>
+
+              <ul className="mt-5 grid gap-2.5 sm:grid-cols-2">
+                {[
+                  { icon: LayoutGrid, text: 'Live floor plan, real tables' },
+                  { icon: CalendarDays, text: 'Date, slot, party size, occasion' },
+                  { icon: UtensilsCrossed, text: 'Special requests reach the kitchen' },
+                  { icon: Bell, text: 'Confirmation and reminder messages' },
+                ].map(({ icon: Icon, text }) => (
+                  <li key={text} className="flex items-center gap-2.5 text-[12.5px] text-ink-soft">
+                    <span className="flex size-[26px] shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-700">
+                      <Icon className="size-[13px]" strokeWidth={2.2} />
+                    </span>
+                    {text}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="flex flex-col gap-2.5">
+              {bookingOpen ? (
+                <Link
+                  to="/reserve"
+                  className="group inline-flex h-[44px] items-center justify-center gap-2 rounded-full bg-brand-bright px-6 text-[13px] font-bold text-white shadow-[0_6px_20px_rgba(192,22,26,.3)] transition hover:bg-brand-600"
+                >
+                  Reserve a table
+                  <ArrowRight className="size-[15px] transition-transform group-hover:translate-x-1" />
+                </Link>
+              ) : (
+                <span className="inline-flex h-[44px] items-center justify-center rounded-full border border-line px-6 text-[13px] font-semibold text-ink-muted">
+                  Online booking is closed
+                </span>
+              )}
+              <Link
+                to="/track"
+                className="inline-flex h-[44px] items-center justify-center rounded-full border border-line px-6 text-[13px] font-semibold text-ink-soft transition hover:border-brand-200 hover:text-brand-700"
+              >
+                Track a booking
+              </Link>
+            </div>
+          </div>
         </div>
-      </Card>
+      </Reveal>
     </Section>
   )
 }
 
-/* --------------------------------------------------------------------- faq */
+/* ------------------------------------------------- 8. FAQ + closing action */
 
-function FaqSection() {
+/**
+ * The FAQ and the final call to action share a section.
+ *
+ * They were two bands; a visitor who has read this far wants the answer and
+ * the button in the same place, not one after the other.
+ */
+function ClosingSection({
+  bookingOpen,
+  content,
+}: {
+  bookingOpen: boolean
+  content: { finalCtaTitle: string; finalCtaBody: string; primaryCtaLabel: string }
+}) {
   const [open, setOpen] = useState<number | null>(0)
 
   return (
-    <Section id="faq" eyebrow="FAQ" title="Questions worth asking" tone="white">
-      <div className="mx-auto max-w-[760px]">
-        <ul className="grid gap-2.5">
-          {faqs.map((f, i) => {
-            const isOpen = open === i
-            return (
-              <li key={f.q}>
-                <Card className={cn('overflow-hidden transition', isOpen && 'shadow-panel')}>
-                  <h3>
-                    <button
-                      type="button"
-                      aria-expanded={isOpen}
-                      aria-controls={`faq-panel-${i}`}
-                      onClick={() => setOpen(isOpen ? null : i)}
-                      className="focus-ring flex w-full items-center gap-3 px-4 py-4 text-left"
-                    >
-                      <span className="flex-1 text-[13.5px] font-bold text-ink">{f.q}</span>
-                      <ChevronDown
-                        className={cn(
-                          'size-[17px] shrink-0 text-brand-700 transition-transform duration-200 motion-reduce:transition-none',
-                          isOpen && 'rotate-180',
-                        )}
-                      />
-                    </button>
-                  </h3>
-                  {isOpen && (
-                    <div id={`faq-panel-${i}`} className="animate-fade-in px-4 pb-4">
-                      <p className="text-[12.5px] leading-relaxed text-ink-muted">{f.a}</p>
+    <Section>
+      <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-14">
+        <div>
+          <SectionHeading eyebrow="FAQ" title="Questions worth asking" />
+
+          <ul className="mt-8 divide-y divide-line">
+            {faqs.map((f, i) => {
+              const isOpen = open === i
+              return (
+                <li key={f.q}>
+                  <button
+                    type="button"
+                    onClick={() => setOpen(isOpen ? null : i)}
+                    aria-expanded={isOpen}
+                    className="focus-ring flex w-full items-start gap-3 py-4 text-left"
+                  >
+                    <span className="flex-1 text-[13.5px] font-bold leading-snug text-ink">
+                      {f.q}
+                    </span>
+                    <ChevronDown
+                      className={cn(
+                        'mt-0.5 size-[16px] shrink-0 text-brand-700 transition-transform duration-300',
+                        isOpen && 'rotate-180',
+                      )}
+                    />
+                  </button>
+                  {/* Grid-rows trick: animates height without measuring it. */}
+                  <div
+                    className={cn(
+                      'grid transition-all duration-300 ease-out',
+                      isOpen ? 'grid-rows-[1fr] pb-4 opacity-100' : 'grid-rows-[0fr] opacity-0',
+                    )}
+                  >
+                    <div className="overflow-hidden">
+                      <p className="pr-8 text-[12.5px] leading-relaxed text-ink-muted">{f.a}</p>
                     </div>
-                  )}
-                </Card>
-              </li>
-            )
-          })}
-        </ul>
-      </div>
-    </Section>
-  )
-}
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
 
-/* --------------------------------------------------------------- final CTA */
+        <Reveal variant="right" delay={120}>
+          <div className="sticky top-24 overflow-hidden rounded-[18px] border border-white/10 bg-[#0C0C0E] p-7">
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute -right-20 -top-20 size-56 rounded-full bg-[radial-gradient(circle,rgba(192,22,26,.5),transparent_66%)] blur-2xl motion-safe:animate-aurora"
+            />
 
-function FinalCta({ bookingOpen, content }: { bookingOpen: boolean; content: LandingContent }) {
-  return (
-    <section className="bg-page px-5 pb-16 lg:pb-24">
-      <div className="mx-auto max-w-[1080px]">
-        <div className="relative overflow-hidden rounded-panel bg-[#0C0C0E] px-6 py-12 text-center sm:px-12 lg:py-16">
-          <div
-            className="absolute inset-0"
-            aria-hidden="true"
-            style={{
-              backgroundImage:
-                'radial-gradient(60% 70% at 20% 10%, rgba(122,17,19,.6) 0%, transparent 60%), radial-gradient(50% 60% at 85% 90%, rgba(212,165,55,.16) 0%, transparent 60%)',
-            }}
-          />
-          <div className="relative">
-            <h2 className="mx-auto max-w-[620px] text-[26px] font-extrabold leading-tight tracking-[-0.025em] text-white sm:text-[34px]">
-              {content.finalCtaTitle}
-            </h2>
-            <p className="mx-auto mt-4 max-w-[520px] text-[14.5px] leading-relaxed text-white/70">
-              {content.finalCtaBody}
-            </p>
+            <div className="relative">
+              <Eyebrow tone="dark">Get started</Eyebrow>
+              <h3 className="mt-3 text-balance text-[23px] font-extrabold leading-tight tracking-[-0.02em] text-white">
+                {content.finalCtaTitle}
+              </h3>
+              <p className="mt-3 text-[13px] leading-relaxed text-white/60">{content.finalCtaBody}</p>
 
-            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              {bookingOpen && (
-                <Link to="/reserve" className="w-full sm:w-auto">
-                  <Button size="lg" block rightIcon={<ArrowRight className="size-[17px]" />}>
+              <div className="mt-6 grid gap-2.5">
+                {bookingOpen && (
+                  <Link
+                    to="/reserve"
+                    className="group inline-flex h-[44px] items-center justify-center gap-2 rounded-full bg-brand-bright px-6 text-[13px] font-bold text-white transition hover:bg-brand-600"
+                  >
                     {content.primaryCtaLabel}
-                  </Button>
-                </Link>
-              )}
-              <Link to="/login" className="w-full sm:w-auto">
-                <Button
-                  size="lg"
-                  block
-                  variant="outlineNeutral"
-                  className="border-white/25 bg-white/[0.04] text-white hover:bg-white/10"
+                    <ArrowRight className="size-[15px] transition-transform group-hover:translate-x-1" />
+                  </Link>
+                )}
+                <Link
+                  to="/login"
+                  className="inline-flex h-[44px] items-center justify-center rounded-full border border-white/18 px-6 text-[13px] font-semibold text-white/85 transition hover:border-gold-400/50 hover:bg-white/5"
                 >
-                  Staff log in
-                </Button>
-              </Link>
+                  Sign in to the console
+                </Link>
+              </div>
             </div>
           </div>
-        </div>
+        </Reveal>
       </div>
-    </section>
-  )
-}
-
-/* ------------------------------------------------------------ section shell */
-
-function Section({
-  id,
-  eyebrow,
-  title,
-  lead,
-  children,
-  tone = 'page',
-}: {
-  id?: string
-  eyebrow: string
-  title: string
-  lead?: string
-  children: ReactNode
-  tone?: 'page' | 'white'
-}) {
-  return (
-    <section
-      id={id}
-      className={cn('scroll-mt-20 py-16 lg:py-24', tone === 'white' ? 'bg-white' : 'bg-page')}
-    >
-      <div className="mx-auto max-w-[1240px] px-5">
-        <div className="mx-auto max-w-[680px] text-center">
-          <p className="text-[12px] font-bold uppercase tracking-[0.08em] text-brand-700">
-            {eyebrow}
-          </p>
-          <h2 className="mt-2.5 text-[26px] font-extrabold tracking-[-0.025em] text-ink sm:text-[34px]">
-            {title}
-          </h2>
-          {lead && (
-            <p className="mt-4 text-[14.5px] leading-relaxed text-ink-muted">{lead}</p>
-          )}
-        </div>
-
-        <div className="mt-10">{children}</div>
-      </div>
-    </section>
+    </Section>
   )
 }

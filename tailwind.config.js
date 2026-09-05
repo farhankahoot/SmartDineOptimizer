@@ -101,11 +101,41 @@ export default {
           from: { transform: 'translateX(-100%)' },
           to: { transform: 'translateX(0)' },
         },
+
+        /* Landing-page motion. Slow and wide so it reads as atmosphere
+           rather than as something demanding attention. */
+        aurora: {
+          '0%, 100%': { transform: 'translate3d(-6%, -3%, 0) scale(1)' },
+          '50%': { transform: 'translate3d(6%, 4%, 0) scale(1.14)' },
+        },
+        float: {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-9px)' },
+        },
+        marquee: {
+          from: { transform: 'translateX(0)' },
+          to: { transform: 'translateX(-50%)' },
+        },
+        /* A highlight sweeping across a surface, used on the hero CTA. */
+        sheen: {
+          '0%': { transform: 'translateX(-120%) skewX(-18deg)' },
+          '60%, 100%': { transform: 'translateX(220%) skewX(-18deg)' },
+        },
+        /* Expanding ring behind the "live" dot. */
+        'ping-soft': {
+          '0%': { transform: 'scale(1)', opacity: '.55' },
+          '80%, 100%': { transform: 'scale(2.4)', opacity: '0' },
+        },
       },
       animation: {
         'fade-in': 'fade-in .16s ease-out',
         'scale-in': 'scale-in .16s ease-out',
         'slide-in-left': 'slide-in-left .22s cubic-bezier(.32,.72,0,1)',
+        aurora: 'aurora 19s ease-in-out infinite',
+        float: 'float 6s ease-in-out infinite',
+        marquee: 'marquee 34s linear infinite',
+        sheen: 'sheen 4.5s ease-in-out infinite',
+        'ping-soft': 'ping-soft 2.4s cubic-bezier(0,0,.2,1) infinite',
       },
     },
   },
