@@ -2,11 +2,11 @@ import {
   forwardRef,
   type InputHTMLAttributes,
   type ReactNode,
-  type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from 'react'
-import { AlertCircle, ChevronDown } from 'lucide-react'
+import { AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/cn'
+import { SelectMenu, type SelectMenuProps } from './SelectMenu'
 
 export function Label({
   children,
@@ -89,51 +89,60 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   )
 })
 
-export interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
+export interface SelectProps {
   icon?: ReactNode
   options: { value: string; label: string }[]
   placeholder?: string
   error?: string
+  value?: string | number | readonly string[]
+  onChange?: (event: { target: { value: string; name?: string } }) => void
+  disabled?: boolean
+  name?: string
+  id?: string
+  className?: string
+  'aria-label'?: string
 }
 
-export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select(
-  { icon, options, placeholder, error, className, ...rest },
-  ref,
-) {
+/**
+ * The console's dropdown.
+ *
+ * Delegates to `SelectMenu`, a custom listbox, because a native `<select>`
+ * renders its popup through the operating system — that list is the one part
+ * of a form the design system cannot reach, and it is why the dropdowns looked
+ * out of place next to everything else.
+ *
+ * The props and the `onChange` shape are unchanged, so call sites reading
+ * `e.target.value` keep working.
+ */
+export function Select({
+  icon,
+  options,
+  placeholder,
+  error,
+  className,
+  value,
+  onChange,
+  disabled,
+  name,
+  id,
+  'aria-label': ariaLabel,
+}: SelectProps) {
   return (
-    <div className="relative">
-      {icon && (
-        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint [&>svg]:size-[15px]">
-          {icon}
-        </span>
-      )}
-      <select
-        ref={ref}
-        aria-invalid={error ? true : undefined}
-        className={cn(
-          control,
-          'h-[42px] cursor-pointer pr-9',
-          icon ? 'pl-9' : 'pl-3.5',
-          error && invalidControl,
-          className,
-        )}
-        {...rest}
-      >
-        {placeholder && (
-          <option value="" disabled>
-            {placeholder}
-          </option>
-        )}
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-ink-muted" />
-    </div>
+    <SelectMenu
+      options={options}
+      value={value === undefined || value === null ? undefined : String(value)}
+      onChange={onChange as SelectMenuProps['onChange']}
+      placeholder={placeholder}
+      icon={icon}
+      error={error}
+      disabled={disabled}
+      name={name}
+      id={id}
+      aria-label={ariaLabel}
+      className={className}
+    />
   )
-})
+}
 
 export interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
   icon?: ReactNode

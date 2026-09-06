@@ -81,6 +81,7 @@ export const defaultHours: DayHours[] = [
 
 /** Module 3 FE-5 plus the Module 1 booking constraints. */
 export interface ReservationRules {
+  /** Minutes before an unapproved request is auto-cancelled. 0 disables it. */
   holdMinutes: number
   maxPartySize: number
   minPartySize: number
@@ -93,7 +94,13 @@ export interface ReservationRules {
 }
 
 export const defaultRules: ReservationRules = {
-  holdMinutes: 10,
+  /*
+   * Auto-cancel window for unapproved requests, in minutes. Zero disables it,
+   * which is the default: a guest who books at 8pm should not receive a
+   * cancellation at 8:10pm because the floor was busy. A restaurant that does
+   * want stale requests cleared can set a window that suits its service.
+   */
+  holdMinutes: 0,
   maxPartySize: 12,
   minPartySize: 1,
   advanceDays: 30,

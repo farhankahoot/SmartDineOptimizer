@@ -360,7 +360,7 @@ export function PublicReservationPage() {
             </div>
 
             <p className="mt-5 text-[11.5px] text-ink-faint">
-              Your table is held for 10 minutes while the restaurant reviews the request.
+              Your table is held while the restaurant reviews your request.
             </p>
           </div>
 
@@ -646,7 +646,7 @@ export function PublicReservationPage() {
           <div className="mt-3 hidden items-start gap-2.5 rounded-[9px] bg-[#FDF3DC] px-3 py-2.5 lg:flex">
             <Info className="mt-0.5 size-[16px] shrink-0 text-[#B9862B]" strokeWidth={2} />
             <div>
-              <p className="text-[12px] font-bold text-ink">Your table is held for 10 minutes</p>
+              <p className="text-[12px] font-bold text-ink">Your table is held for you</p>
               <p className="mt-0.5 text-[11px] text-ink-soft">
                 Complete your booking to secure your reservation.
               </p>

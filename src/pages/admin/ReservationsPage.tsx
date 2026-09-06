@@ -402,7 +402,14 @@ export function ReservationsPage() {
                 />
               ) : (
                 <>
-                  <DataTable columns={columns} rows={visible} rowKey={(r) => r.id} minWidth={1020} />
+                  <DataTable
+                    columns={columns}
+                    rows={visible}
+                    rowKey={(r) => r.id}
+                    minWidth={1020}
+                    // Page two starts at 11, not back at 1.
+                    startIndex={(current - 1) * rowsPerPage}
+                  />
                   <div className="border-t border-line">
                     <Pagination
                       page={current}

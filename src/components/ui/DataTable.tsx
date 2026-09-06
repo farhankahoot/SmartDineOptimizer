@@ -20,6 +20,8 @@ export function DataTable<T>({
   variant = 'plain',
   emptyMessage = 'No records found.',
   minWidth = 900,
+  rowNumbers = true,
+  startIndex = 0,
 }: {
   columns: Column<T>[]
   rows: T[]
@@ -27,6 +29,13 @@ export function DataTable<T>({
   variant?: 'plain' | 'grid'
   emptyMessage?: string
   minWidth?: number
+  /** Set false for tables where a position number would be meaningless. */
+  rowNumbers?: boolean
+  /**
+   * Where this page starts in the whole set, so a paginated table numbers its
+   * second page 11, 12, 13 … rather than restarting at 1.
+   */
+  startIndex?: number
 }) {
   const grid = variant === 'grid'
 
@@ -38,6 +47,17 @@ export function DataTable<T>({
       >
         <thead>
           <tr className={grid ? 'bg-[#FAF6F0]' : 'bg-white'}>
+            {rowNumbers && (
+              <th
+                scope="col"
+                className={cn(
+                  'w-[46px] whitespace-nowrap px-1.5 py-3 text-center text-[11.5px] font-bold text-ink-faint',
+                  grid ? 'border border-line' : 'border-b border-line',
+                )}
+              >
+                #
+              </th>
+            )}
             {columns.map((c) => (
               <th
                 key={c.key}
@@ -58,7 +78,7 @@ export function DataTable<T>({
           {rows.length === 0 ? (
             <tr>
               <td
-                colSpan={columns.length}
+                colSpan={columns.length + (rowNumbers ? 1 : 0)}
                 className="px-3 py-12 text-center text-[13px] text-ink-muted"
               >
                 {emptyMessage}
@@ -70,6 +90,16 @@ export function DataTable<T>({
                 key={rowKey(row, i)}
                 className={cn('transition-colors hover:bg-[#FBF9F7]', !grid && 'border-b border-line-soft')}
               >
+                {rowNumbers && (
+                  <td
+                    className={cn(
+                      'px-1.5 py-[11px] text-center align-middle text-[11.5px] tabular-nums text-ink-faint',
+                      grid && 'border border-line',
+                    )}
+                  >
+                    {startIndex + i + 1}
+                  </td>
+                )}
                 {columns.map((c) => (
                   <td
                     key={c.key}

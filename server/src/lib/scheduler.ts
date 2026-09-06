@@ -118,7 +118,16 @@ async function releaseExpiredHolds(): Promise<void> {
   // its table regardless of age.
   const cutoff = new Date(Date.now() - rules.holdMinutes * 60_000)
   const expired = await prisma.reservation.findMany({
-    where: { status: 'Pending', activeHold: 'held', createdAt: { lt: cutoff } },
+    where: {
+      status: 'Pending',
+      activeHold: 'held',
+      createdAt: { lt: cutoff },
+      // Only bookings still ahead of us. A pending request for a date that has
+      // already passed is moot: releasing its table changes nothing, and
+      // emailing the guest a cancellation for last month's dinner is worse
+      // than doing nothing. Those are closed quietly by the no-show job.
+      date: { gte: isoDate(new Date()) },
+    },
     take: 50,
   })
 

@@ -475,7 +475,7 @@ export function SettingsPage() {
                 <div className="grid gap-3.5 sm:grid-cols-2">
                   <NumberField
                     id="rl-hold"
-                    label="Table hold time (minutes)"
+                    label="Auto-cancel unapproved requests after (minutes, 0 = never)"
                     value={rules.holdMinutes}
                     disabled={!canManage}
                     onChange={(v) => setRules((r) => ({ ...r, holdMinutes: v }))}

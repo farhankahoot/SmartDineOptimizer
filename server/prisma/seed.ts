@@ -346,25 +346,40 @@ async function main() {
 
   /* ---- Modules 1 & 2: reservations with their full status trail. */
   const validTableCodes = new Set(tables.map((t) => t.code))
+  const now = new Date()
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   const seen = new Set<string>()
   let reservationCount = 0
   let eventCount = 0
 
   for (const [index, r] of fixtureReservations.entries()) {
-    const iso = toIso(r.date)
     const tableCode = validTableCodes.has(r.table) ? r.table : 'A01'
 
-    // The fixture cycles 20 rows out to 58, so the repeats are pushed onto
-    // later dates — otherwise they would collide on the double-booking key.
+    /*
+     * The fixture's dates are from May 2025, which made every seeded booking
+     * historical: the console opened with an empty worklist and the scheduler
+     * closed the lot out within minutes. Anchoring them to the day the seed
+     * runs gives a demo with real pending work on real upcoming dates.
+     *
+     * The 20-row fixture is cycled out to 58, so repeats are pushed a week on
+     * at a time — otherwise they would collide on the double-booking key.
+     */
+    const dayOffset = (index % 20) % 7
     const shift = Math.floor(index / 20) * 7
-    const date = shift === 0 ? iso : addDays(iso, shift)
+    const date = addDays(today, dayOffset + shift)
 
     const key = `${tableCode}|${date}|${r.timeSlot}`
     if (LIVE.has(r.status) && seen.has(key)) continue
     if (LIVE.has(r.status)) seen.add(key)
 
+    // Requests arrive a couple of days before the booking, not all at once.
+    const requestedAt = new Date(
+      new Date(`${date}T12:00:00`).getTime() - (2 + (index % 3)) * 86_400_000,
+    )
+
     const created = await prisma.reservation.create({
       data: {
+        createdAt: requestedAt,
         reference: r.reference,
         customerName: r.customerName,
         phone: r.phone,

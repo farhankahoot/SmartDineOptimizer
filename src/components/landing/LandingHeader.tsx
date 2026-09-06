@@ -5,13 +5,20 @@ import { cn } from '@/lib/cn'
 import { BrandLogo } from '@/components/layout/BrandLogo'
 import { Button } from '@/components/ui/Button'
 
+/**
+ * Written for a diner, not a buyer.
+ *
+ * The previous labels ("Product", "Features", "Analytics") described software
+ * to a purchaser, and three of the six pointed at anchors that no longer
+ * existed — clicking them scrolled nowhere. Every entry here matches a real
+ * section id and says what a guest would be looking for.
+ */
 const sections = [
-  { label: 'Product', href: '#product' },
-  { label: 'Features', href: '#features' },
-  { label: 'How it works', href: '#how-it-works' },
-  { label: 'Restaurants', href: '#restaurants' },
-  { label: 'Analytics', href: '#analytics' },
-  { label: 'FAQ', href: '#faq' },
+  { label: 'Book a table', href: '#booking' },
+  { label: 'How it works', href: '#how' },
+  { label: 'Menus & occasions', href: '#deals' },
+  { label: 'Our restaurants', href: '#restaurants' },
+  { label: 'Questions', href: '#faq' },
 ]
 
 /** Sticky marketing navigation for the public site. */
@@ -34,7 +41,7 @@ export function LandingHeader() {
       )}
     >
       <div className="mx-auto flex max-w-[1240px] items-center gap-6 px-5 py-3">
-        <Link to="/" aria-label="SmartDine Optimizer home" className="focus-ring rounded">
+        <Link to="/" aria-label="Asian Wok home" className="focus-ring rounded">
           <BrandLogo scale={0.8} />
         </Link>
 

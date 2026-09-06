@@ -175,7 +175,13 @@ export function AuditPage() {
             />
           ) : (
             <>
-              <DataTable columns={columns} rows={visible} rowKey={(a) => a.id} minWidth={900} />
+              <DataTable
+                columns={columns}
+                rows={visible}
+                rowKey={(a) => a.id}
+                minWidth={900}
+                startIndex={(current - 1) * rowsPerPage}
+              />
               <div className="border-t border-line">
                 <Pagination
                   page={current}
