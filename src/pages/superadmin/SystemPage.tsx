@@ -130,8 +130,6 @@ export function SystemPage() {
         title="System Controls"
         underline
         onToggleNav={toggle}
-        profileName="Super Admin"
-        profileRole="Platform"
         action={
           <Button
             variant="outlineNeutral"

@@ -157,8 +157,6 @@ export function DashboardPage() {
       <PageHeader
         title="Real-Time Operations Dashboard"
         underline
-        notificationCount={alerts.length}
-        profileName={user?.name ?? 'Admin User'}
         onToggleNav={toggle}
         action={
           <Button

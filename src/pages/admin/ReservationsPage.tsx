@@ -223,8 +223,6 @@ export function ReservationsPage() {
     <>
       <PageHeader
         title="Admin Reservation Management"
-        showProfile={false}
-        notificationCount={5}
         onToggleNav={toggle}
         action={
           canManage ? (

@@ -269,9 +269,6 @@ export function CommunicationPage() {
       <PageHeader
         title="Customer Communication and Notification Management"
         underline
-        notificationCount={8}
-        profileName="Admin"
-        profileRole="Restaurant Admin"
         showNavToggle
         onToggleNav={toggle}
       />

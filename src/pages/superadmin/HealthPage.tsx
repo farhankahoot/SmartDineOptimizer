@@ -72,8 +72,6 @@ export function HealthPage() {
         title="System Health"
         underline
         onToggleNav={toggle}
-        profileName="Super Admin"
-        profileRole="Platform"
         action={
           <Button
             variant="outline"

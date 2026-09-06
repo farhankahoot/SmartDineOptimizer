@@ -48,7 +48,7 @@ export function ReservationDetailPage() {
   if (!reservation) {
     return (
       <>
-        <PageHeader title="Reservation" showProfile={false} onToggleNav={toggle} />
+        <PageHeader title="Reservation" onToggleNav={toggle} />
         <div className="px-[var(--page-pad-x)] py-[var(--page-pad-y)]">
           <Card>
             <EmptyState
@@ -72,8 +72,6 @@ export function ReservationDetailPage() {
     <>
       <PageHeader
         title={reservation.customerName}
-        showProfile={false}
-        notificationCount={5}
         onToggleNav={toggle}
       />
 

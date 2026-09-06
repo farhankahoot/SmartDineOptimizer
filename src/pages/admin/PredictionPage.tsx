@@ -246,7 +246,7 @@ export function PredictionPage() {
 
   return (
     <>
-      <PageHeader title="Prediction and Analytics Dashboard" notificationCount={3} onToggleNav={toggle} />
+      <PageHeader title="Prediction and Analytics Dashboard" onToggleNav={toggle} />
 
       <div className="grid gap-4 px-[var(--page-pad-x)] py-[var(--page-pad-y)]">
         {/*

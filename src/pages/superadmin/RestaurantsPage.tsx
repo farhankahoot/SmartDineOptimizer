@@ -199,8 +199,6 @@ export function RestaurantsPage() {
         title="Restaurants"
         underline
         onToggleNav={toggle}
-        profileName="Super Admin"
-        profileRole="Platform"
         action={
           <Button
             leftIcon={<Plus className="size-[15px]" />}

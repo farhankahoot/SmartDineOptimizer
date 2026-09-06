@@ -219,8 +219,6 @@ export function TableManagementPage() {
         title="Table and Time Slot Management Module"
         accentPrefix={2}
         banner
-        showProfile={false}
-        notificationCount={5}
         onToggleNav={toggle}
       />
 

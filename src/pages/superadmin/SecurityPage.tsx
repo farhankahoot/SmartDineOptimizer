@@ -89,8 +89,6 @@ export function SecurityPage() {
         title="Security"
         underline
         onToggleNav={toggle}
-        profileName="Super Admin"
-        profileRole="Platform"
       />
 
       <div className="grid gap-4 px-[var(--page-pad-x)] py-[var(--page-pad-y)]">

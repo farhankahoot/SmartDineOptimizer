@@ -245,7 +245,6 @@ export function StaffPage() {
       <PageHeader
         title="Staff Management"
         underline
-        notificationCount={3}
         onToggleNav={toggle}
         action={
           canManage ? (

@@ -321,6 +321,66 @@ publicRouter.post(
   }),
 )
 
+/**
+ * Guest feedback.
+ *
+ * Public and unauthenticated, so it is rate limited alongside the other public
+ * writes and every field is bounded. Stored as a record and raised as a
+ * control-centre notification, so it survives the notification being read.
+ */
+publicRouter.post(
+  '/feedback',
+  route(async (req, res) => {
+    const input = parse(
+      z.object({
+        name: z.string().trim().min(2, 'Please tell us your name.').max(80),
+        // Optional: absent and empty are both fine, but a value must be valid.
+        email: z
+          .string()
+          .trim()
+          .toLowerCase()
+          .email('Enter a valid email address.')
+          .or(z.literal(''))
+          .optional()
+          .default(''),
+        reference: z.string().trim().max(20).optional(),
+        rating: z.coerce.number().int().min(1, 'Choose a rating.').max(5),
+        topic: z.enum(['Food', 'Service', 'Booking', 'Ambience', 'Other']),
+        message: z.string().trim().min(10, 'Tell us a little more.').max(1000),
+      }),
+      req.body,
+    )
+
+    const saved = await prisma.feedback.create({
+      data: {
+        name: input.name,
+        email: input.email,
+        reference: input.reference?.toUpperCase() ?? '',
+        rating: input.rating,
+        topic: input.topic,
+        message: input.message,
+      },
+    })
+
+    await notifyAdmins({
+      // A poor rating is something the restaurant should see today.
+      tone: input.rating <= 2 ? 'danger' : input.rating >= 4 ? 'success' : 'warning',
+      title: `${input.rating}/5 — ${input.topic.toLowerCase()} feedback from ${input.name}`,
+      detail: input.message.slice(0, 240),
+      link: '/superadmin/notifications',
+    })
+
+    await audit({
+      actorName: input.name,
+      action: `Left ${input.rating}/5 feedback`,
+      target: input.topic,
+      category: 'Reservation',
+    })
+
+    res.status(201).json({ ok: true, id: saved.id })
+  }),
+)
+
 /** Public showcase carousel (Module: platform content). */
 publicRouter.get(
   '/showcase',

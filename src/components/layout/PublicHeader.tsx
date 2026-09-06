@@ -8,7 +8,7 @@ const navLinks = [
   { label: 'Home', to: '/' },
   { label: 'Reservation', to: '/reserve' },
   { label: 'Track Booking', to: '/track' },
-  { label: 'Feedback', to: '/' },
+  { label: 'Feedback', to: '/feedback' },
 ]
 
 /** Dark restaurant-site header shared by the booking page and the tracker. */

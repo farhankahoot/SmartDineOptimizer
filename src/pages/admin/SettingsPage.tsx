@@ -286,7 +286,7 @@ export function SettingsPage() {
 
   return (
     <>
-      <PageHeader title="Settings" underline notificationCount={5} onToggleNav={toggle} />
+      <PageHeader title="Settings" underline onToggleNav={toggle} />
 
       <div className="px-[var(--page-pad-x)] py-[var(--page-pad-y)]">
         {!canManage && (

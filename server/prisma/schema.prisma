@@ -342,3 +342,23 @@ model AdminNotification {
 
   @@index([read])
 }
+
+/// Guest feedback left from the public site.
+///
+/// Stored rather than only raised as a notification, so a restaurant keeps the
+/// record after the notification has been read and dismissed.
+model Feedback {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @default("")
+  /// Optional: ties the comment to a visit when the guest knows their code.
+  reference String   @default("")
+  rating    Int // 1-5
+  topic     String // Food | Service | Booking | Ambience | Other
+  message   String
+  handled   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([handled])
+  @@index([rating])
+}

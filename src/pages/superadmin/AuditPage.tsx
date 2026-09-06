@@ -81,8 +81,6 @@ export function AuditPage() {
         title="Audit Log"
         underline
         onToggleNav={toggle}
-        profileName="Super Admin"
-        profileRole="Platform"
         action={
           <Button
             variant="outline"

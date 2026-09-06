@@ -20,7 +20,6 @@ import { Card, SectionTitle } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/cn'
-import { useAuth } from '@/auth/AuthContext'
 import { useUsers } from '@/store/UsersContext'
 import { usePlatform } from '@/store/PlatformContext'
 import { useSystem } from '@/store/SystemContext'
@@ -43,7 +42,6 @@ const toneStyles = {
 /** Platform-wide overview: people, restaurants, system posture and pending work. */
 export function SuperOverviewPage() {
   const { toggle } = useMobileNav()
-  const { user } = useAuth()
   const { users } = useUsers()
   const { restaurants, notifications, audit, sessions, flags, unreadCount } = usePlatform()
   const { system } = useSystem()
@@ -102,9 +100,6 @@ export function SuperOverviewPage() {
       <PageHeader
         title="Platform Control Centre"
         underline
-        notificationCount={unreadCount}
-        profileName={user?.name ?? 'Super Admin'}
-        profileRole={user ? roleLabels[user.role] : 'Super Admin'}
         onToggleNav={toggle}
       />
 

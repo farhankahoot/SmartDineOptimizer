@@ -100,6 +100,7 @@ app.use('/api/auth', authRouter)
 
 app.use('/api/public/reservations', bookingLimiter)
 app.use('/api/public/showcase/submit', publicWriteLimiter)
+app.use('/api/public/feedback', publicWriteLimiter)
 app.use('/api/public', publicRouter)
 
 // Everything below needs a session, and is blocked while read-only mode is on.

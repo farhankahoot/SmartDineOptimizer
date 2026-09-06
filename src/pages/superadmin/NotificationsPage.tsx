@@ -38,10 +38,7 @@ export function NotificationsPage() {
       <PageHeader
         title="Notifications"
         underline
-        notificationCount={unreadCount}
         onToggleNav={toggle}
-        profileName="Super Admin"
-        profileRole="Platform"
         action={
           <Button
             variant="outline"

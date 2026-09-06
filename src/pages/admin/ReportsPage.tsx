@@ -198,7 +198,6 @@ export function ReportsPage() {
       <PageHeader
         title="Reports"
         underline
-        notificationCount={5}
         onToggleNav={toggle}
         action={
           <Button

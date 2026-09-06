@@ -6,6 +6,7 @@ import { ScrollToTop } from '@/components/layout/ScrollToTop'
 import { LandingPage } from '@/pages/public/LandingPage'
 import { PublicReservationPage } from '@/pages/public/PublicReservationPage'
 import { TrackReservationPage } from '@/pages/public/TrackReservationPage'
+import { FeedbackPage } from '@/pages/public/FeedbackPage'
 import { NotFoundPage } from '@/pages/public/NotFoundPage'
 import { BookingGate, MaintenanceGate, TrackingGate } from '@/pages/public/PublicGate'
 
@@ -98,6 +99,7 @@ export default function App() {
         <Route element={<TrackingGate />}>
           <Route path="/track" element={<TrackReservationPage />} />
         </Route>
+        <Route path="/feedback" element={<FeedbackPage />} />
       </Route>
 
       {/* ---------------------------------------------- authentication */}

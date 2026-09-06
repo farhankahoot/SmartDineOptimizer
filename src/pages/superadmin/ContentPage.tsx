@@ -80,8 +80,6 @@ export function ContentPage() {
         title="Landing Page"
         underline
         onToggleNav={toggle}
-        profileName="Super Admin"
-        profileRole="Platform"
         action={
           <Link to="/" target="_blank" rel="noreferrer">
             <Button variant="outline" leftIcon={<ExternalLink className="size-[15px]" />}>

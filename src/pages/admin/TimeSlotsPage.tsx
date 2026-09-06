@@ -20,8 +20,6 @@ export function TimeSlotsPage() {
         title="Time Slot Management"
         accentPrefix={2}
         banner
-        showProfile={false}
-        notificationCount={5}
         onToggleNav={toggle}
       />
 

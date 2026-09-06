@@ -383,7 +383,6 @@ export function FoodDealsPage() {
       <PageHeader
         title="Food Deals and Customer Request Management"
         underline
-        notificationCount={12}
         onToggleNav={toggle}
       />
 

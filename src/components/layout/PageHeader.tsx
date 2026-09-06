@@ -1,16 +1,16 @@
-import { useState, type ReactNode } from 'react'
-import { Bell, ChevronDown, Menu } from 'lucide-react'
+import type { ReactNode } from 'react'
+import { Menu } from 'lucide-react'
 import { cn } from '@/lib/cn'
+import { NotificationBell } from './NotificationBell'
+import { AccountMenu } from './AccountMenu'
 
 export interface PageHeaderProps {
   title: string
   /** Right-hand action rendered before the bell (e.g. "Add Reservation"). */
   action?: ReactNode
-  notificationCount?: number
+
   /** Admin User / Restaurant Admin block — absent on the Reservations mockup. */
-  showProfile?: boolean
-  profileName?: string
-  profileRole?: string
+
   /** Warm patterned banner + dragon watermark (Table Management mockup). */
   banner?: boolean
   /** Short gold rule under the title — Food Deals and Communication mockups. */
@@ -25,18 +25,12 @@ export interface PageHeaderProps {
 export function PageHeader({
   title,
   action,
-  notificationCount,
-  showProfile = true,
-  profileName = 'Admin User',
-  profileRole = 'Administrator',
   banner,
   underline,
   accentPrefix = 0,
   showNavToggle,
   onToggleNav,
 }: PageHeaderProps) {
-  const [menuOpen, setMenuOpen] = useState(false)
-
   return (
     <header
       className={cn(
@@ -75,55 +69,9 @@ export function PageHeader({
           {/* The page action sits inline from sm; on phones it drops to its own row. */}
           <span className="hidden sm:inline-flex">{action}</span>
 
-          <button
-            type="button"
-            aria-label={`Notifications${notificationCount ? `, ${notificationCount} unread` : ''}`}
-            className="focus-ring relative rounded-lg p-1.5 text-brand-700 transition hover:bg-brand-50"
-          >
-            <Bell className="size-[19px]" strokeWidth={1.9} />
-            {!!notificationCount && (
-              <span className="absolute -right-0.5 -top-0.5 flex min-w-[16px] items-center justify-center rounded-full bg-state-dangerSolid px-1 text-[9px] font-bold leading-[15px] text-white">
-                {notificationCount}
-              </span>
-            )}
-          </button>
+          <NotificationBell />
 
-          {showProfile && (
-            <div className="relative hidden items-center gap-2.5 border-l border-line pl-3.5 sm:flex">
-              <LotusAvatar />
-              <div className="leading-tight">
-                <p className="text-[12.5px] font-bold text-ink">{profileName}</p>
-                <p className="text-[10.5px] text-ink-muted">{profileRole}</p>
-              </div>
-              <button
-                type="button"
-                aria-label="Account menu"
-                aria-expanded={menuOpen}
-                onClick={() => setMenuOpen((v) => !v)}
-                className="focus-ring rounded p-0.5 text-ink-muted transition hover:text-ink"
-              >
-                <ChevronDown className={cn('size-4 transition', menuOpen && 'rotate-180')} />
-              </button>
-
-              {menuOpen && (
-                <>
-                  <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-                  <div className="absolute right-0 top-[calc(100%+10px)] z-20 w-[168px] animate-scale-in overflow-hidden rounded-[10px] border border-line bg-white py-1 shadow-pop">
-                    {['My Profile', 'Preferences', 'Sign out'].map((item) => (
-                      <button
-                        key={item}
-                        type="button"
-                        onClick={() => setMenuOpen(false)}
-                        className="block w-full px-3.5 py-2 text-left text-[12.5px] text-ink-soft transition hover:bg-line-soft"
-                      >
-                        {item}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
+          <AccountMenu />
         </div>
       </div>
 
@@ -134,22 +82,7 @@ export function PageHeader({
   )
 }
 
-/** Maroon disc with the gold lotus emblem used as the admin avatar. */
-function LotusAvatar() {
-  return (
-    <span className="flex size-[34px] shrink-0 items-center justify-center rounded-full bg-brand-800">
-      <svg viewBox="0 0 24 24" className="size-[19px]" fill="#D4A537" aria-hidden="true">
-        <path d="M12 4.2c1.5 1.6 2.3 3.4 2.3 5.3 0 1-.2 1.9-.6 2.8-.4-.9-.6-1.8-.6-2.8 0-1.9.8-3.7 2.3-5.3z" opacity=".9" transform="rotate(0 12 12)" />
-        <path d="M12 3.4c1.7 1.9 2.6 3.9 2.6 6 0 2-.9 4-2.6 5.9-1.7-1.9-2.6-3.9-2.6-5.9 0-2.1.9-4.1 2.6-6z" />
-        <path d="M6.2 6.6c2.3.9 3.9 2.2 4.9 3.9 1 1.7 1.3 3.7 1 6-2.3-.9-3.9-2.2-4.9-3.9-1-1.7-1.3-3.7-1-6z" opacity=".85" />
-        <path d="M17.8 6.6c.3 2.3 0 4.3-1 6-1 1.7-2.6 3-4.9 3.9-.3-2.3 0-4.3 1-6 1-1.7 2.6-3 4.9-3.9z" opacity=".85" />
-        <path d="M3.6 12.5c2.4-.2 4.3.2 5.8 1.1 1.5.9 2.6 2.4 3.3 4.5-2.4.2-4.3-.2-5.8-1.1-1.5-.9-2.6-2.4-3.3-4.5z" opacity=".7" />
-        <path d="M20.4 12.5c-.7 2.1-1.8 3.6-3.3 4.5-1.5.9-3.4 1.3-5.8 1.1.7-2.1 1.8-3.6 3.3-4.5 1.5-.9 3.4-1.3 5.8-1.1z" opacity=".7" />
-      </svg>
-    </span>
-  )
-}
-
+/** Gold dragon line-art behind the banner variant of the header. */
 function DragonWatermark() {
   return (
     <svg
