@@ -126,7 +126,7 @@ export function LandingPage() {
         <ForRestaurants />
       </main>
 
-      <LandingFooter />
+      <LandingFooter profile={config?.profile} hours={config?.hours} />
     </div>
   )
 }
