@@ -52,8 +52,6 @@ const PlatformUsersPage = page(
   'PlatformUsersPage',
 )
 const RolesPage = page(() => import('@/pages/superadmin/RolesPage'), 'RolesPage')
-const RestaurantsPage = page(() => import('@/pages/superadmin/RestaurantsPage'), 'RestaurantsPage')
-const ShowcasePage = page(() => import('@/pages/superadmin/ShowcasePage'), 'ShowcasePage')
 const ContentPage = page(() => import('@/pages/superadmin/ContentPage'), 'ContentPage')
 const SystemPage = page(() => import('@/pages/superadmin/SystemPage'), 'SystemPage')
 const HealthPage = page(() => import('@/pages/superadmin/HealthPage'), 'HealthPage')
@@ -163,12 +161,6 @@ export default function App() {
             </Route>
             <Route element={<RequirePermission permission="manage:roles" mode="forbid" />}>
               <Route path="roles" element={lazyRoute(RolesPage)} />
-            </Route>
-            <Route element={<RequirePermission permission="manage:restaurants" mode="forbid" />}>
-              <Route path="restaurants" element={lazyRoute(RestaurantsPage)} />
-            </Route>
-            <Route element={<RequirePermission permission="manage:showcase" mode="forbid" />}>
-              <Route path="showcase" element={lazyRoute(ShowcasePage)} />
             </Route>
             <Route element={<RequirePermission permission="manage:content" mode="forbid" />}>
               <Route path="content" element={lazyRoute(ContentPage)} />

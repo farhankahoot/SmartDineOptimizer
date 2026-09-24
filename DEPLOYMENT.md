@@ -144,8 +144,6 @@ These are deliberate and documented rather than overlooked:
   /api/predictions/ingest` is the contract for a real training service.
 - **SMS and WhatsApp have no gateway.** Those templates are logged, never sent.
   All five message templates default to Email for that reason.
-- **Uploaded showcase images are stored inline** in the database as data URLs.
-  Move to object storage before handling real volume.
 - **PDF export uses the browser's print dialog.** CSV is generated server-side.
 - **No automated test suite.** Behaviour has been verified by driving the
   running system, not by regression tests.

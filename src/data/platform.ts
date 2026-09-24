@@ -13,7 +13,6 @@ export interface FeatureFlag {
 export const featureFlags: FeatureFlag[] = [
   { id: 'FF-01', name: 'Online reservations', description: 'Guests can submit booking requests from the public site.', enabled: true, area: 'Public', endpoint: 'PATCH /admin/feature-flags/online-reservations' },
   { id: 'FF-02', name: 'Booking status tracker', description: 'Guests can look up a reservation with their booking reference.', enabled: true, area: 'Public', endpoint: 'PATCH /admin/feature-flags/booking-tracker' },
-  { id: 'FF-03', name: 'Restaurant showcase', description: 'Shows the Pakistan restaurant carousel on the landing page.', enabled: true, area: 'Public', endpoint: 'PATCH /admin/feature-flags/restaurant-showcase' },
   { id: 'FF-04', name: 'Table management', description: 'Floor plan, table records and the availability checker.', enabled: true, area: 'Console', endpoint: 'PATCH /admin/feature-flags/table-management' },
   { id: 'FF-05', name: 'Food deals', description: 'Occasion-based deal management and customer special requests.', enabled: true, area: 'Console', endpoint: 'PATCH /admin/feature-flags/food-deals' },
   { id: 'FF-06', name: 'Staff management', description: 'Staff records, shift availability and allocation planning.', enabled: true, area: 'Console', endpoint: 'PATCH /admin/feature-flags/staff-management' },
@@ -28,7 +27,6 @@ export const featureFlags: FeatureFlag[] = [
 
 export type AuditCategory =
   | 'User'
-  | 'Restaurant'
   | 'System'
   | 'Feature'
   | 'Content'
@@ -48,9 +46,9 @@ export interface AuditEntry {
 export const auditSeed: AuditEntry[] = [
   { id: 'AL-1042', at: '24 May 2025 · 12:48 PM', actor: 'Admin User', action: 'Confirmed reservation', target: 'RES-2025-1002', category: 'Reservation', result: 'Success' },
   { id: 'AL-1041', at: '24 May 2025 · 11:20 AM', actor: 'Admin User', action: 'Blocked account', target: 'bilal.khan@asianwok.pk', category: 'User', result: 'Success' },
-  { id: 'AL-1040', at: '24 May 2025 · 10:05 AM', actor: 'Admin User', action: 'Enabled feature flag', target: 'Restaurant showcase', category: 'Feature', result: 'Success' },
+  { id: 'AL-1040', at: '24 May 2025 · 10:05 AM', actor: 'Admin User', action: 'Enabled feature flag', target: 'Booking status tracker', category: 'Feature', result: 'Success' },
   { id: 'AL-1039', at: '23 May 2025 · 06:12 PM', actor: 'Hira Azmat', action: 'Updated reservation', target: 'RES-2025-1014', category: 'Reservation', result: 'Success' },
-  { id: 'AL-1038', at: '23 May 2025 · 04:40 PM', actor: 'Admin User', action: 'Added showcase restaurant', target: 'Highland Cafe Murree', category: 'Restaurant', result: 'Success' },
+  { id: 'AL-1038', at: '23 May 2025 · 04:40 PM', actor: 'Admin User', action: 'Updated opening hours', target: 'Sunday 12:00 PM – 11:00 PM', category: 'System', result: 'Success' },
   { id: 'AL-1037', at: '23 May 2025 · 02:15 PM', actor: 'Admin User', action: 'Changed reservation rules', target: 'Table hold time → 10 min', category: 'System', result: 'Success' },
   { id: 'AL-1036', at: '23 May 2025 · 09:31 AM', actor: 'Haroon Ejaz', action: 'Failed sign-in attempt', target: 'floor@asianwok.pk', category: 'Security', result: 'Failed' },
   { id: 'AL-1035', at: '22 May 2025 · 08:02 PM', actor: 'Admin User', action: 'Updated landing hero copy', target: 'Landing page', category: 'Content', result: 'Success' },
@@ -74,7 +72,7 @@ export interface AdminNotification {
 }
 
 export const notificationSeed: AdminNotification[] = [
-  { id: 'AN-1', tone: 'warning', title: 'Restaurant awaiting approval', detail: 'Highland Cafe Murree was submitted to the showcase and is pending review.', at: '18 min ago', read: false, to: '/superadmin/restaurants' },
+  { id: 'AN-1', tone: 'warning', title: 'Reservations awaiting approval', detail: '12 booking requests are still pending review on the operations dashboard.', at: '18 min ago', read: false, to: '/admin/reservations' },
   { id: 'AN-2', tone: 'danger', title: 'Messaging channel not configured', detail: 'SMS and WhatsApp notifications are disabled — API credentials are missing.', at: '1 hr ago', read: false, to: '/superadmin/system' },
   { id: 'AN-3', tone: 'info', title: 'New user invitation pending', detail: 'sana.riaz@asianwok.pk has not accepted their invitation yet.', at: '3 hr ago', read: false, to: '/superadmin/users' },
   { id: 'AN-4', tone: 'warning', title: 'Account blocked', detail: 'bilal.khan@asianwok.pk was blocked by an administrator.', at: 'Yesterday', read: true, to: '/superadmin/users' },
@@ -131,37 +129,37 @@ export const sessionSeed: AdminSession[] = [
 
 /* --------------------------------------------------------- landing content */
 
+/**
+ * Landing-page copy the Control Centre can edit.
+ *
+ * Every field here is rendered by the public page. That is the whole contract:
+ * a CMS field nothing reads is worse than no field at all, because it lets an
+ * administrator "save" copy that never appears and gives them no way to tell.
+ *
+ * Anything the page derives from real data — the restaurant name, the cuisine
+ * and city badge, the button labels that change with live availability — is
+ * deliberately *not* here. Those are answers, not copy, and letting someone
+ * overwrite them by hand is how a page starts lying to guests.
+ */
 export interface LandingContent {
-  heroBadge: string
-  heroTitleTop: string
+  /** The gold second line of the hero headline. */
   heroTitleAccent: string
+  /** The paragraph under the hero headline. */
   heroSubtitle: string
-  primaryCtaLabel: string
-  secondaryCtaLabel: string
-  showcaseEyebrow: string
-  showcaseTitle: string
-  showcaseLead: string
+  /** The dark panel beside the questions section. */
   finalCtaTitle: string
   finalCtaBody: string
+  /** Optional strip above the header. */
   announcementEnabled: boolean
   announcementText: string
 }
 
 export const defaultLandingContent: LandingContent = {
-  heroBadge: 'Reservations + machine-learning operations planning',
-  heroTitleTop: 'Fill every table.',
-  heroTitleAccent: 'Plan every shift.',
+  heroTitleAccent: 'and the seat you want.',
   heroSubtitle:
-    'SmartDine Optimizer replaces phone calls, WhatsApp messages and paper records with structured online booking — then forecasts footfall, revenue, food demand and staffing so your team plans service before it starts.',
-  primaryCtaLabel: 'Reserve a table',
-  secondaryCtaLabel: 'Explore the platform',
-  showcaseEyebrow: 'Across Pakistan',
-  showcaseTitle: 'Restaurants building smarter service',
-  showcaseLead:
-    'From the Margalla foothills to the Karachi seafront — a growing directory of dining rooms across Pakistan, curated from the admin console.',
-  finalCtaTitle: 'Ready to see it running?',
-  finalCtaBody:
-    'Book a table the way your guests would, or sign in to the console and walk through the reservation, table, deal, staffing and prediction modules.',
+    'See which tables are free tonight, choose the one you want from the floor plan, and keep a reference you can check any time. No phone calls, no waiting to hear back.',
+  finalCtaTitle: 'Ready when you are',
+  finalCtaBody: 'Pick your table and we will hold it while the restaurant confirms.',
   announcementEnabled: false,
-  announcementText: 'New: the Pakistan restaurant showcase is now live on the landing page.',
+  announcementText: 'Now taking bookings for the weekend — the terrace fills up early.',
 }

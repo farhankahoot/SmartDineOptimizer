@@ -15,7 +15,6 @@ import { deals as fixtureDeals } from '../../src/data/deals.js'
 import { specialRequests } from '../../src/data/requests.js'
 import { staffMembers } from '../../src/data/staff.js'
 import { notifications, messageTemplates } from '../../src/data/communication.js'
-import { restaurants } from '../../src/data/restaurants.js'
 import { featureFlags, auditSeed, notificationSeed } from '../../src/data/platform.js'
 import {
   revenueForecast,
@@ -298,7 +297,6 @@ async function main() {
   await prisma.timeSlot.deleteMany()
   await prisma.deal.deleteMany()
   await prisma.staffMember.deleteMany()
-  await prisma.showcaseRestaurant.deleteMany()
   await prisma.featureFlag.deleteMany()
   await prisma.setting.deleteMany()
 
@@ -501,24 +499,7 @@ async function main() {
   await prisma.dailyMetric.createMany({ data: metrics })
   console.log(`  daily metrics        ${metrics.length}`)
 
-  /* ---- Platform: showcase, flags, settings, audit, notifications. */
-  await prisma.showcaseRestaurant.createMany({
-    data: restaurants.map((r) => ({
-      name: r.name,
-      city: r.city,
-      province: r.province,
-      cuisine: r.cuisine,
-      description: r.description,
-      coverFrom: r.cover[0],
-      coverTo: r.cover[1],
-      website: r.website ?? null,
-      featured: r.featured,
-      status: r.status,
-      sortOrder: r.order,
-    })),
-  })
-  console.log(`  showcase             ${restaurants.length}`)
-
+  /* ---- Platform: flags, settings, audit, notifications. */
   await prisma.featureFlag.createMany({
     data: featureFlags.map((f) => ({
       key: f.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),

@@ -109,7 +109,7 @@ export const bookingLimiter = rateLimit({
   },
 })
 
-/** Anything unauthenticated that writes: reset requests, showcase submissions. */
+/** Anything unauthenticated that writes: password resets, guest feedback. */
 export const publicWriteLimiter = rateLimit({
   ...baseOptions,
   windowMs: 60 * 60_000,

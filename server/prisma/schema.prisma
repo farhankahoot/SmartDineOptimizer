@@ -277,27 +277,6 @@ model NotificationLog {
 
 // ------------------------------------------------- Platform / control centre
 
-model ShowcaseRestaurant {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  city        String
-  province    String
-  cuisine     String
-  description String
-  imageUrl    String?
-  coverFrom   String   @default("#7A1113")
-  coverTo     String   @default("#2A1410")
-  website     String?
-  featured    Boolean  @default(false)
-  status      String   @default("Pending") // Active|Pending|Suspended|Inactive|Rejected
-  sortOrder   Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@index([status])
-  @@index([sortOrder])
-}
-
 model FeatureFlag {
   id          String   @id @default(cuid())
   key         String   @unique
@@ -323,7 +302,7 @@ model AuditEntry {
   actorName String   @default("System")
   action    String
   target    String   @default("")
-  category  String // User|Restaurant|System|Feature|Content|Security|Reservation
+  category  String // User|System|Feature|Content|Security|Reservation|Message
   result    String   @default("Success") // Success | Failed
   at        DateTime @default(now())
 

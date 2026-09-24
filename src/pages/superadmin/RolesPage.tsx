@@ -23,7 +23,7 @@ const groups: { title: string; match: (p: Permission) => boolean }[] = [
   { title: 'Reservations & service', match: (p) => /reservations|dashboard|tables|slots|deals/.test(p) },
   { title: 'People & messaging', match: (p) => /staff|communication|users/.test(p) },
   { title: 'Analytics & settings', match: (p) => /prediction|reports|settings/.test(p) },
-  { title: 'Platform control', match: (p) => /platform|roles|restaurants|showcase|content|system|features|health|security|audit/.test(p) },
+  { title: 'Platform control', match: (p) => /platform|roles|content|system|features|health|security|audit/.test(p) },
 ]
 
 export function RolesPage() {

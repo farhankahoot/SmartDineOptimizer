@@ -19,14 +19,42 @@ export function ScrollToTop() {
   }, [])
 
   useLayoutEffect(() => {
-    if (hash) return
-
-    window.scrollTo(0, 0)
-    document
-      .querySelectorAll<HTMLElement>('[data-scroll-root]')
-      .forEach((el) => {
+    if (!hash) {
+      window.scrollTo(0, 0)
+      document.querySelectorAll<HTMLElement>('[data-scroll-root]').forEach((el) => {
         el.scrollTop = 0
       })
+      return
+    }
+
+    /*
+     * Arriving with a hash — a shared or bookmarked link like `/#deals`.
+     *
+     * The browser looks for the anchor while the document is still the empty
+     * SPA shell, finds nothing, and gives up; by the time React has rendered
+     * the section, nobody is going to scroll to it. Several of those sections
+     * also wait on the public config request, so this retries across a short
+     * window rather than assuming the target exists on the first frame.
+     *
+     * `scrollIntoView` is used rather than a manual offset because it honours
+     * the section's own `scroll-margin-top`, which is what keeps the heading
+     * clear of the sticky header.
+     */
+    const id = decodeURIComponent(hash.slice(1))
+    const deadline = performance.now() + 2000
+    let frame = 0
+
+    const settle = () => {
+      const target = document.getElementById(id)
+      if (target) {
+        target.scrollIntoView()
+        return
+      }
+      if (performance.now() < deadline) frame = requestAnimationFrame(settle)
+    }
+
+    frame = requestAnimationFrame(settle)
+    return () => cancelAnimationFrame(frame)
   }, [pathname, hash])
 
   return null

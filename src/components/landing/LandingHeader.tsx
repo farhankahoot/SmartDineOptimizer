@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, LogIn, Menu, Phone, X } from 'lucide-react'
+import { ArrowRight, LogIn, Menu, Phone, Search, X } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { BrandLogo } from '@/components/layout/BrandLogo'
 import { useNavIndicator, useSectionSpy } from '@/components/layout/useNavIndicator'
+import { useSystem } from '@/store/SystemContext'
 
 /**
  * Written for a diner, not a buyer.
@@ -15,7 +16,6 @@ const sections = [
   { label: 'Book a table', id: 'booking' },
   { label: 'How it works', id: 'how' },
   { label: 'Menus & occasions', id: 'deals' },
-  { label: 'Our restaurants', id: 'restaurants' },
   { label: 'Questions', id: 'faq' },
 ]
 
@@ -28,6 +28,16 @@ export function LandingHeader() {
 
   const activeId = useSectionSpy(sectionIds)
   const { containerRef, registerItem, indicator } = useNavIndicator(activeId)
+
+  /*
+   * The header's primary action follows the same switch the page body does.
+   *
+   * Offering "Reserve a table" on a page whose hero reads "Online booking is
+   * closed" contradicts itself, and the link only leads to the closed-booking
+   * gate anyway. When bookings are off, the useful action is the tracker.
+   */
+  const { system } = useSystem()
+  const bookingOpen = system.publicBookingEnabled && !system.maintenanceMode
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8)
@@ -125,11 +135,20 @@ export function LandingHeader() {
           </Link>
 
           <Link
-            to="/reserve"
+            to={bookingOpen ? '/reserve' : '/track'}
             className="group focus-ring inline-flex h-[38px] items-center gap-1.5 rounded-full bg-brand-bright px-5 text-[12.5px] font-bold text-white shadow-[0_4px_16px_rgba(192,22,26,.35)] transition hover:bg-brand-600"
           >
-            Reserve a table
-            <ArrowRight className="size-[14px] transition-transform group-hover:translate-x-0.5" />
+            {bookingOpen ? (
+              <>
+                Reserve a table
+                <ArrowRight className="size-[14px] transition-transform group-hover:translate-x-0.5" />
+              </>
+            ) : (
+              <>
+                <Search className="size-[14px]" />
+                Check my booking
+              </>
+            )}
           </Link>
         </div>
 
@@ -181,12 +200,21 @@ export function LandingHeader() {
 
           <div className="mt-3 grid gap-2 border-t border-white/10 pt-3">
             <Link
-              to="/reserve"
+              to={bookingOpen ? '/reserve' : '/track'}
               onClick={() => setOpen(false)}
               className="inline-flex h-[46px] items-center justify-center gap-2 rounded-full bg-brand-bright text-[14px] font-bold text-white"
             >
-              Reserve a table
-              <ArrowRight className="size-[15px]" />
+              {bookingOpen ? (
+                <>
+                  Reserve a table
+                  <ArrowRight className="size-[15px]" />
+                </>
+              ) : (
+                <>
+                  <Search className="size-[15px]" />
+                  Check my booking
+                </>
+              )}
             </Link>
             <Link
               to="/login"

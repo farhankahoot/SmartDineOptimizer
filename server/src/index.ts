@@ -99,7 +99,6 @@ app.use('/api/auth/reset-password', authSourceLimiter, authLimiter)
 app.use('/api/auth', authRouter)
 
 app.use('/api/public/reservations', bookingLimiter)
-app.use('/api/public/showcase/submit', publicWriteLimiter)
 app.use('/api/public/feedback', publicWriteLimiter)
 app.use('/api/public', publicRouter)
 

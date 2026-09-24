@@ -39,8 +39,6 @@ export type Permission =
   | 'view:platform'
   | 'manage:platform-users'
   | 'manage:roles'
-  | 'manage:restaurants'
-  | 'manage:showcase'
   | 'manage:content'
   | 'manage:system'
   | 'manage:features'
@@ -70,8 +68,6 @@ export const allPermissions: Permission[] = [
   'view:platform',
   'manage:platform-users',
   'manage:roles',
-  'manage:restaurants',
-  'manage:showcase',
   'manage:content',
   'manage:system',
   'manage:features',
@@ -84,8 +80,6 @@ export const allPermissions: Permission[] = [
 const PLATFORM_ONLY = new Set<Permission>([
   'manage:platform-users',
   'manage:roles',
-  'manage:restaurants',
-  'manage:showcase',
   'manage:content',
   'manage:system',
   'manage:features',

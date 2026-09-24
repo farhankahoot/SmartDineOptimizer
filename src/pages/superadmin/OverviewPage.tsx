@@ -1,15 +1,15 @@
 import { Link } from 'react-router-dom'
 import {
+  Activity,
   AlertTriangle,
   ArrowRight,
-  Building2,
+  CalendarClock,
   CheckCircle2,
   CircleSlash,
   Clock,
   Gauge,
   Info,
   ShieldCheck,
-  Store,
   UserPlus,
   Users,
 } from 'lucide-react'
@@ -39,23 +39,17 @@ const toneStyles = {
   success: 'bg-state-successBg text-state-success',
 }
 
-/** Platform-wide overview: people, restaurants, system posture and pending work. */
+/** Platform-wide overview: people, system posture and pending work. */
 export function SuperOverviewPage() {
   const { toggle } = useMobileNav()
   const { users } = useUsers()
-  const { restaurants, notifications, audit, sessions, flags, unreadCount } = usePlatform()
+  const { notifications, audit, sessions, flags, unreadCount } = usePlatform()
   const { system } = useSystem()
   const { reservations } = useReservations()
 
   const activeUsers = users.filter((u) => u.status === 'Active').length
   const blockedUsers = users.filter((u) => u.status === 'Suspended').length
   const invitedUsers = users.filter((u) => u.status === 'Invited').length
-
-  const activeRestaurants = restaurants.filter((r) => r.status === 'Active').length
-  const pendingRestaurants = restaurants.filter((r) => r.status === 'Pending').length
-  const suspendedRestaurants = restaurants.filter(
-    (r) => r.status === 'Suspended' || r.status === 'Inactive',
-  ).length
 
   const pendingReservations = reservations.filter((r) => r.status === 'Pending').length
   const disabledFlags = flags.filter((f) => !f.enabled)
@@ -73,10 +67,6 @@ export function SuperOverviewPage() {
   ].filter(Boolean) as string[]
 
   const pendingActions = [
-    pendingRestaurants > 0 && {
-      label: `${pendingRestaurants} restaurant${pendingRestaurants === 1 ? '' : 's'} awaiting approval`,
-      to: '/superadmin/restaurants',
-    },
     invitedUsers > 0 && {
       label: `${invitedUsers} invitation${invitedUsers === 1 ? '' : 's'} not accepted`,
       to: '/superadmin/users',
@@ -125,9 +115,9 @@ export function SuperOverviewPage() {
           <StatCard variant="circleUp" color="#7A1113" icon={<Users />} label="Total Users" value={String(users.length)} caption="Console accounts" />
           <StatCard variant="circleUp" color="#2E7D32" icon={<CheckCircle2 />} label="Active Users" value={String(activeUsers)} caption="Can sign in now" />
           <StatCard variant="circleUp" color="#C0392B" icon={<CircleSlash />} label="Blocked Users" value={String(blockedUsers)} caption="Refused at sign-in" />
-          <StatCard variant="circleUp" color="#C99A3E" icon={<Building2 />} label="Restaurants" value={String(restaurants.length)} caption="In the directory" />
-          <StatCard variant="circleUp" color="#1B62B5" icon={<Store />} label="Live in Showcase" value={String(activeRestaurants)} caption="Visible publicly" />
-          <StatCard variant="circleUp" color="#E4572E" icon={<Clock />} label="Pending Review" value={String(pendingRestaurants + invitedUsers)} caption="Awaiting an admin" />
+          <StatCard variant="circleUp" color="#C99A3E" icon={<Activity />} label="Active Sessions" value={String(sessions.length)} caption="Signed in right now" />
+          <StatCard variant="circleUp" color="#1B62B5" icon={<CalendarClock />} label="Pending Bookings" value={String(pendingReservations)} caption="Awaiting approval" />
+          <StatCard variant="circleUp" color="#E4572E" icon={<Clock />} label="Invitations Open" value={String(invitedUsers)} caption="Not accepted yet" />
         </section>
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_330px]">
@@ -166,63 +156,31 @@ export function SuperOverviewPage() {
               )}
             </Card>
 
-            {/* Directory + user breakdown */}
-            <div className="grid gap-4 lg:grid-cols-2">
-              <Card className="p-4">
-                <SectionTitle icon={<Building2 className="size-[16px]" strokeWidth={2.3} />}>
-                  Restaurant Directory
-                </SectionTitle>
-                <dl className="mt-3 grid gap-2">
-                  {(
-                    [
-                      { label: 'Active', count: activeRestaurants, tone: 'confirmed' },
-                      { label: 'Pending approval', count: pendingRestaurants, tone: 'pending' },
-                      { label: 'Suspended / inactive', count: suspendedRestaurants, tone: 'cancelled' },
-                    ] as const
-                  ).map((row) => (
-                    <div
-                      key={row.label}
+            {/* User breakdown */}
+            <Card className="p-4">
+              <SectionTitle icon={<Users className="size-[16px]" strokeWidth={2.3} />}>
+                Users by Role
+              </SectionTitle>
+              <ul className="mt-3 grid gap-2">
+                {(Object.keys(roleLabels) as (keyof typeof roleLabels)[]).map((role) => {
+                  const count = users.filter((u) => u.role === role).length
+                  return (
+                    <li
+                      key={role}
                       className="flex items-center justify-between gap-3 rounded-[9px] bg-[#FBF9F7] px-3.5 py-2.5"
                     >
-                      <dt className="text-[12px] text-ink-soft">{row.label}</dt>
-                      <dd>
-                        <Badge tone={row.tone}>{row.count}</Badge>
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-                <Link to="/superadmin/restaurants" className="mt-3 block">
-                  <Button variant="outline" size="sm" block rightIcon={<ArrowRight className="size-[13px]" />}>
-                    Manage restaurants
-                  </Button>
-                </Link>
-              </Card>
-
-              <Card className="p-4">
-                <SectionTitle icon={<Users className="size-[16px]" strokeWidth={2.3} />}>
-                  Users by Role
-                </SectionTitle>
-                <ul className="mt-3 grid gap-2">
-                  {(Object.keys(roleLabels) as (keyof typeof roleLabels)[]).map((role) => {
-                    const count = users.filter((u) => u.role === role).length
-                    return (
-                      <li
-                        key={role}
-                        className="flex items-center justify-between gap-3 rounded-[9px] bg-[#FBF9F7] px-3.5 py-2.5"
-                      >
-                        <span className="text-[12px] text-ink-soft">{roleLabels[role]}</span>
-                        <span className="text-[12.5px] font-bold text-ink">{count}</span>
-                      </li>
-                    )
-                  })}
-                </ul>
-                <Link to="/superadmin/users" className="mt-3 block">
-                  <Button variant="outline" size="sm" block rightIcon={<ArrowRight className="size-[13px]" />}>
-                    Manage users
-                  </Button>
-                </Link>
-              </Card>
-            </div>
+                      <span className="text-[12px] text-ink-soft">{roleLabels[role]}</span>
+                      <span className="text-[12.5px] font-bold text-ink">{count}</span>
+                    </li>
+                  )
+                })}
+              </ul>
+              <Link to="/superadmin/users" className="mt-3 block">
+                <Button variant="outline" size="sm" block rightIcon={<ArrowRight className="size-[13px]" />}>
+                  Manage users
+                </Button>
+              </Link>
+            </Card>
 
             {/* Recent platform activity */}
             <Card className="p-4">
@@ -346,7 +304,6 @@ export function SuperOverviewPage() {
               <ul className="mt-3 grid gap-1.5">
                 {[
                   { label: 'Invite a user', to: '/superadmin/users' },
-                  { label: 'Add a restaurant', to: '/superadmin/showcase' },
                   { label: 'Edit landing page', to: '/superadmin/content' },
                   { label: 'Feature flags', to: '/superadmin/system' },
                   { label: 'Review sessions', to: '/superadmin/security' },

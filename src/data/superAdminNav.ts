@@ -1,14 +1,12 @@
 import {
   Activity,
   Bell,
-  Building2,
   FileText,
   Gauge,
   Images,
   LayoutGrid,
   ShieldCheck,
   SlidersHorizontal,
-  Store,
   Users,
   type LucideIcon,
 } from 'lucide-react'
@@ -41,13 +39,11 @@ export const superAdminNav: SuperNavGroup[] = [
     items: [
       { label: 'Users', to: '/superadmin/users', icon: Users, permission: 'manage:platform-users' },
       { label: 'Roles & Permissions', to: '/superadmin/roles', icon: ShieldCheck, permission: 'manage:roles' },
-      { label: 'Restaurants', to: '/superadmin/restaurants', icon: Building2, permission: 'manage:restaurants' },
     ],
   },
   {
     title: 'Content',
     items: [
-      { label: 'Restaurant Showcase', to: '/superadmin/showcase', icon: Store, permission: 'manage:showcase' },
       { label: 'Landing Page', to: '/superadmin/content', icon: Images, permission: 'manage:content' },
     ],
   },

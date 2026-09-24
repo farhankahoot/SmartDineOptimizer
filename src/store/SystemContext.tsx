@@ -26,8 +26,6 @@ export interface SystemSettings {
   trackingEnabled: boolean
   /** Self-signup — off by default; this build provisions accounts by invitation. */
   registrationEnabled: boolean
-  /** Lets restaurants submit themselves to the showcase for approval. */
-  restaurantSubmissionsEnabled: boolean
   /** Shown alongside the maintenance notice. */
   maintenanceEta: string
   /** Auto sign-out after this many idle minutes. */
@@ -47,7 +45,6 @@ const defaults: SystemSettings = {
   publicBookingEnabled: true,
   trackingEnabled: true,
   registrationEnabled: false,
-  restaurantSubmissionsEnabled: true,
   maintenanceEta: '',
   sessionTimeoutMinutes: 60,
   minPasswordLength: 8,

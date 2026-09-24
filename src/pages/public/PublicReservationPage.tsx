@@ -1,5 +1,5 @@
-import { useEffect, useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ArrowRight,
   CalendarDays,
@@ -169,14 +169,50 @@ export function PublicReservationPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [availability.data])
 
-  // Seed the date and slot from the live options the moment they arrive.
+  /*
+   * Seed the date, slot and party size from the live options the moment they
+   * arrive.
+   *
+   * The home page's booking starter hands its three answers over in the query
+   * string so nothing is typed twice. They are treated as a suggestion rather
+   * than a command: each is used only if it is genuinely on offer, so a stale
+   * bookmark or a hand-edited URL cannot seed a value the server would refuse.
+   * The handoff applies once — after that the guest owns the form, and a
+   * refetch must not snap their choices back to the URL.
+   */
+  const [searchParams] = useSearchParams()
+  const handoffUsed = useRef(false)
+
   useEffect(() => {
     if (!config) return
-    setForm((f) => ({
-      ...f,
-      date: dateOptions.some((d) => d.value === f.date) ? f.date : (dateOptions[0]?.value ?? ''),
-      timeSlot: slotOptions.includes(f.timeSlot) ? f.timeSlot : (slotOptions[0] ?? ''),
-    }))
+
+    const handoff = handoffUsed.current ? null : searchParams
+    handoffUsed.current = true
+
+    setForm((f) => {
+      const wantedDate = handoff?.get('date') ?? ''
+      const wantedSlot = handoff?.get('slot') ?? ''
+      const wantedGuests = Number(handoff?.get('guests'))
+
+      const pick = (wanted: string, current: string, options: string[]) =>
+        options.includes(wanted) ? wanted : options.includes(current) ? current : (options[0] ?? '')
+
+      const guestsInRange =
+        Number.isInteger(wantedGuests) &&
+        wantedGuests >= (rules?.minPartySize ?? 1) &&
+        wantedGuests <= maxGuests
+
+      return {
+        ...f,
+        date: pick(
+          wantedDate,
+          f.date,
+          dateOptions.map((d) => d.value),
+        ),
+        timeSlot: pick(wantedSlot, f.timeSlot, slotOptions),
+        guests: guestsInRange ? String(wantedGuests) : f.guests,
+      }
+    })
     // dateOptions/slotOptions are derived from config, so config is the trigger.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config])
@@ -427,7 +463,7 @@ export function PublicReservationPage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 rounded-[12px] border border-white/12 bg-black/45 p-2.5 backdrop-blur-[2px] sm:gap-5 sm:p-3.5 sm:px-5">
+          <div className="grid grid-cols-3 gap-2 rounded-[12px] border border-white/10 bg-black/45 p-2.5 backdrop-blur-[2px] sm:gap-5 sm:p-3.5 sm:px-5">
             {heroBadges.map(({ icon: Icon, title, detail, ring }) => (
               <div key={title} className="flex items-center gap-1.5 sm:gap-2.5">
                 <span

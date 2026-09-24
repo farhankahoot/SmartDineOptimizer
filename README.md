@@ -59,19 +59,36 @@ token expiry.
 ### Public site
 | Route | Screen | Requirement |
 | --- | --- | --- |
-| `/` | Marketing landing page — hero, live product preview, modules, workflow, prediction, FAQ | Proposal overview |
+| `/` | Home — live availability, the real floor plan, set menus, FAQ | Proposal overview |
 | `/reserve` | Reserve Your Table (+ floor plan, seating preference, success state) | Module 1 FE-1…FE-5, BO-2 |
 | `/track` | Track Your Reservation — status + history by reference | Module 1 FE-6 |
 
-The landing page includes a **Pakistan restaurant showcase** — an autoplaying,
-keyboard- and swipe-driven carousel filtered by province. Every card comes from
-the Control Centre; nothing on it is hardcoded.
+#### The home page starts the booking; `/reserve` finishes it
 
-The landing page reuses the console's own components — `StatCard`, `Card`,
-`Badge`, `Button`, `FloorPlan` and the real dashboard charts — so the product
-preview *is* the product, not a mock-up of it. There is no public sign-up: the
-proposal provisions accounts by invitation (Module 8 FE-2), so the CTAs point at
-`/reserve` for guests and `/login` for staff.
+The hero carries a **booking starter**: four quick dates, the restaurant's own
+time slots and a party stepper, all bounded by the live reservation rules. It
+queries `/public/availability` as you change them and answers honestly —
+*"4 of 28 tables free for 8 guests at 6:00 PM"* — then hands the three answers
+to `/reserve` as query parameters so nothing is typed twice.
+
+The booking page treats that handoff as a *suggestion*: each value is used only
+if it is genuinely on offer, so a stale bookmark or a hand-edited URL falls back
+to safe defaults rather than seeding something the server would reject.
+
+Below it, **the room preview renders the same `FloorPlan` the console and the
+booking page use**, fed by the same endpoint — so the green tables really are
+the ones free *and* large enough for your party at the time chosen above.
+Changing the party size in the hero redraws the floor plan. It is deliberately
+not selectable: choosing a table is a booking decision and belongs on the page
+that captures the guest's details in the same step.
+
+Everything else on the page is read from the database too — the fact strip
+(tables, sittings, party limit, booking window), the set menus and their prices,
+and the opening hours. Nothing on it is a marketing figure.
+
+There is no public sign-up: the proposal provisions accounts by invitation
+(Module 8 FE-2), so the CTAs point at `/reserve` for guests and `/login` for
+staff.
 
 ### Authentication
 | Route | Screen | Requirement |
@@ -103,35 +120,33 @@ redirect.
 
 | Route | Screen |
 | --- | --- |
-| `/superadmin` | Overview — users, restaurants, pending actions, alerts, system snapshot |
+| `/superadmin` | Overview — users, sessions, pending actions, alerts, system snapshot |
 | `/superadmin/notifications` | Platform events, read/unread, dismiss |
 | `/superadmin/users` | Search, filter, sort, invite, re-role, block (with reason), reset, delete |
 | `/superadmin/roles` | Role cards + full permission matrix across all four roles |
-| `/superadmin/restaurants` | Directory: approve, reject, suspend, edit, delete, detail view |
-| `/superadmin/showcase` | Showcase Manager — order, featured, status, **live carousel preview** |
-| `/superadmin/content` | Landing-page CMS — hero, CTAs, showcase copy, announcement bar |
+| `/superadmin/content` | Landing-page CMS — hero copy, closing panel, announcement bar |
 | `/superadmin/system` | Availability, registration, feature flags, data & maintenance |
 | `/superadmin/health` | Declared component states + pre-launch checklist |
 | `/superadmin/security` | Sessions, sign-in policy, security activity |
 | `/superadmin/audit` | Full audit trail with search, filters and pagination |
 
-#### Showcase image guidance
-
-The carousel renders covers in an `aspect-[16/10]` container with
-`object-fit: cover`, so the uploader asks for **1600 × 1000 px (16:10), max 2 MB,
-JPG/PNG/WebP** — 2× the largest rendered card width. The upload field previews
-the file at the real card ratio and warns when the resolution is too low or the
-aspect ratio would crop the subject.
-
 #### Scope note
 
-The proposal's LI-1 keeps the *operational* system single-restaurant. The
-showcase is therefore **marketing content** — a curated directory of Pakistani
-restaurants on the public site — not additional tenants of the reservation
-console. `Settings › System Control` (restaurant admin) and
+The proposal's LI-1 keeps the system single-restaurant, and the build now holds
+to that everywhere: there is no directory of other restaurants and no notion of
+additional tenants. `Settings › System Control` (restaurant admin) and
 `/superadmin/system` (platform) read and write the same `SystemContext`, so the
-shared switches can never drift; the platform page adds registration,
-submissions, feature flags and data operations on top.
+shared switches can never drift; the platform page adds registration, feature
+flags and data operations on top.
+
+#### What the Landing Page CMS may edit
+
+Only copy the public page actually renders: the hero's second headline line and
+its supporting paragraph, the closing panel, and the announcement bar. The
+restaurant name, the cuisine-and-city badge and the button labels are derived
+from real data — the buttons change themselves with live availability — so they
+are deliberately not editable. A CMS field that saves successfully and changes
+nothing on the page is worse than no field at all.
 
 ### Administrator system controls
 
@@ -166,7 +181,8 @@ src/
 │                  PlatformContext (restaurants, flags, CMS, audit, sessions)
 ├─ components/
 │  ├─ layout/      AdminLayout, Sidebar, PageHeader, PublicHeader, BrandLogo
-│  ├─ landing/     LandingHeader, ProductPreview, RestaurantShowcase, LandingFooter
+│  ├─ landing/     LandingHeader, Hero, BookingStarter, RoomPreview,
+│  │               LandingFooter, Reveal, primitives
 │  ├─ superadmin/  SuperAdminLayout, RestaurantFormModal, ImageUploadField
 │  ├─ ui/          Button, Card, Badge, Field, DataTable, Pagination, Modal,
 │  │               ConfirmDialog, Tabs, Toast, States (empty/error/skeleton)
@@ -176,7 +192,9 @@ src/
 │  ├─ reservation/ StatusTimeline, ReservationFormModal
 │  ├─ table/       TableFormModal, AvailabilityChecker
 │  └─ icons/       Glyphs Lucide does not ship (dining table, solid funnel)
-├─ data/           All mock datasets — swap these for API calls
+├─ data/           Shared types, option lists and the seed fixtures. The
+│                  screens read the API; the seed imports these so the
+│                  database and the UI agree by construction.
 └─ pages/
    ├─ public/      Landing, booking, tracker, maintenance, gates, 403, 404
    ├─ auth/        Login, forgot, reset
@@ -227,7 +245,7 @@ Money is stored as integer paisa, never a float.
 | Area | Routes |
 | --- | --- |
 | Auth | `POST /auth/login`, `/logout`, `/forgot-password`, `/reset-password`, `/change-password`; `GET /auth/me`, `/auth/sessions` |
-| Public (Module 1) | `GET /public/config`, `/public/availability`, `/public/reservations/:ref`, `/public/showcase`; `POST /public/reservations`, `/public/reservations/:ref/cancel`, `/public/showcase/submit` |
+| Public (Module 1) | `GET /public/config`, `/public/availability`, `/public/reservations/:ref`; `POST /public/reservations`, `/public/reservations/:ref/cancel`, `/public/feedback` |
 | Reservations (Module 2) | `GET /reservations`, `/stats`, `/upcoming`, `/:id`; `POST /`, `/:id/status`, `/bulk-status`, `/:id/resend`; `PATCH /:id` |
 | Tables (Module 3) | `GET /tables`, `/stats`, `/availability`; `POST /`; `PATCH /:id`, `/:id/position`; `DELETE /:id` |
 | Time slots (Module 3) | `GET /time-slots`; `POST /`; `PATCH /:id`; `DELETE /:id` |
@@ -240,7 +258,7 @@ Money is stored as integer paisa, never a float.
 | Settings (Modules 3, 5, 7) | `GET /settings`, `/settings/data-summary`; `PUT /settings/profile`, `/hours`, `/rules`, `/prediction` |
 | Notifications (Module 8) | `GET /notifications`, `/stats`, `/activity`, `/templates`, `/settings`; `POST /send`, `/:id/resend`; `PUT /settings`; `PATCH /templates/:id` |
 | Users (Module 8) | `GET /users`, `/users/roles`; `POST /`, `/:id/status`, `/:id/invite`, `/:id/revoke-sessions`; `PATCH /:id`; `DELETE /:id` |
-| Platform | `GET/POST/PATCH/DELETE /platform/restaurants`, `/features`, `/content`, `/system`, `/audit`, `/notifications`, `/sessions`, `/health`, `/overview` |
+| Platform | `GET/POST/PATCH/DELETE /platform/features`, `/content`, `/system`, `/audit`, `/notifications`, `/sessions`, `/health`, `/overview` |
 
 ### What the numbers are computed from
 
@@ -308,8 +326,6 @@ Set `RUN_SCHEDULER=false` on every instance but one when running more than one.
 - **SMS and WhatsApp.** No gateway credentials exist, so those channels are
   logged with the reason recorded, never sent. All five templates default to
   Email, which is the only channel with a real transport.
-- **Media storage.** Uploaded showcase covers are stored inline in the database
-  as data URLs. Move them to object storage before handling real volume.
 - **PDF export.** CSV is generated server-side. PDF uses the browser's own
   print-to-PDF against a print stylesheet.
 - **Automated tests.** Behaviour has been verified by driving the running
@@ -338,5 +354,6 @@ Set `RUN_SCHEDULER=false` on every instance but one when running more than one.
   so no billing or subscription UI exists.
 - **Currency is PKR (₨)** throughout — deals, revenue forecasts, dashboard
   charts and reports. The currency itself is configurable in Settings › Profile.
-- **Bundle split.** The public site ships a 170 kB entry chunk; the console and
-  the 564 kB charting library load only once a signed-in user opens them.
+- **Bundle split.** The public site ships a 215 kB entry chunk (61 kB gzipped);
+  the console and the 564 kB charting library load only once a signed-in user
+  opens them.

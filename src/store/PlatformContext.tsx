@@ -7,7 +7,6 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import type { Restaurant, ShowcaseStatus } from '@/data/restaurants'
 import {
   defaultLandingContent,
   type AdminNotification,
@@ -20,21 +19,8 @@ import {
 import { api } from '@/lib/api'
 import { useAuth } from '@/auth/AuthContext'
 
-export type NewRestaurant = Omit<Restaurant, 'id' | 'order' | 'addedOn'>
-
 interface PlatformValue {
   loading: boolean
-
-  /* ------------------------------------------------------- restaurants */
-  restaurants: Restaurant[]
-  /** Active + ordered, for the public carousel. */
-  publicRestaurants: Restaurant[]
-  addRestaurant: (input: NewRestaurant) => Promise<Restaurant>
-  updateRestaurant: (id: string, patch: Partial<Restaurant>) => Promise<void>
-  removeRestaurant: (id: string) => Promise<void>
-  setRestaurantStatus: (id: string, status: ShowcaseStatus) => Promise<void>
-  toggleFeatured: (id: string) => Promise<void>
-  moveRestaurant: (id: string, direction: -1 | 1) => Promise<void>
 
   /* ----------------------------------------------------- feature flags */
   flags: FeatureFlag[]
@@ -78,25 +64,6 @@ interface PlatformValue {
 const PlatformContext = createContext<PlatformValue | null>(null)
 
 /* --------------------------------------------------------------- adapters */
-
-interface ApiRestaurant {
-  id: string
-  name: string
-  city: string
-  province: string
-  cuisine: string
-  description: string
-  image?: string
-  cover: [string, string]
-  website?: string
-  featured: boolean
-  status: ShowcaseStatus
-  order: number
-  addedOn: string
-}
-
-const adaptRestaurant = (r: ApiRestaurant): Restaurant =>
-  ({ ...r, province: r.province, addedOn: formatDate(r.addedOn) }) as Restaurant
 
 interface ApiFlag {
   key: string
@@ -190,7 +157,6 @@ function relative(iso: string): string {
 /* -------------------------------------------------------------- provider */
 
 export function PlatformProvider({ children }: { children: ReactNode }) {
-  const [restaurants, setRestaurants] = useState<Restaurant[]>([])
   const [flags, setFlags] = useState<FeatureFlag[]>([])
   const [landing, setLandingState] = useState<LandingContent>(defaultLandingContent)
   const [audit, setAudit] = useState<AuditEntry[]>([])
@@ -203,11 +169,9 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
   const loadPublic = useCallback(async () => {
     try {
       const config = await api.get<{
-        showcase: ApiRestaurant[]
         features: Record<string, boolean>
         landing: LandingContent
       }>('/public/config')
-      setRestaurants(config.showcase.map(adaptRestaurant))
       setLandingState((prev) => ({ ...prev, ...config.landing }))
     } catch {
       // Leave the defaults so the landing page still renders.
@@ -225,8 +189,7 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
 
     // Each feed is probed independently: a manager is allowed to be refused
     // the audit trail without that emptying the rest of the console.
-    const [rs, fl, ct, au, nt, se] = await Promise.all([
-      api.probe<{ restaurants: ApiRestaurant[] }>('/platform/restaurants', { perPage: 100 }),
+    const [fl, ct, au, nt, se] = await Promise.all([
       api.probe<{ features: ApiFlag[] }>('/platform/features'),
       api.probe<{ content: LandingContent }>('/platform/content'),
       api.probe<{ entries: ApiAudit[] }>('/platform/audit', { perPage: 50 }),
@@ -234,7 +197,6 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
       api.probe<{ sessions: ApiSession[] }>('/platform/sessions'),
     ])
 
-    if (rs) setRestaurants(rs.restaurants.map(adaptRestaurant))
     if (fl) setFlags(fl.features.map(adaptFlag))
     if (ct) setLandingState(ct.content)
     if (au) setAudit(au.entries.map(adaptAudit))
@@ -258,104 +220,6 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
     const result = await api.probe<{ entries: ApiAudit[] }>('/platform/audit', { perPage: 50 })
     if (result) setAudit(result.entries.map(adaptAudit))
   }, [])
-
-  /* ------------------------------------------------------ restaurants */
-
-  const addRestaurant = useCallback(
-    async (input: NewRestaurant) => {
-      const { restaurant } = await api.post<{ restaurant: ApiRestaurant }>(
-        '/platform/restaurants',
-        {
-          name: input.name,
-          city: input.city,
-          province: input.province,
-          cuisine: input.cuisine,
-          description: input.description,
-          website: input.website ?? '',
-          featured: input.featured,
-          status: input.status,
-          coverFrom: input.cover?.[0],
-          coverTo: input.cover?.[1],
-          image: input.image,
-        },
-      )
-      const record = adaptRestaurant(restaurant)
-      setRestaurants((prev) => [...prev, record])
-      void refreshAudit()
-      return record
-    },
-    [refreshAudit],
-  )
-
-  const updateRestaurant = useCallback(
-    async (id: string, patch: Partial<Restaurant>) => {
-      const { restaurant } = await api.patch<{ restaurant: ApiRestaurant }>(
-        `/platform/restaurants/${id}`,
-        {
-          ...(patch.name ? { name: patch.name } : {}),
-          ...(patch.city ? { city: patch.city } : {}),
-          ...(patch.province ? { province: patch.province } : {}),
-          ...(patch.cuisine ? { cuisine: patch.cuisine } : {}),
-          ...(patch.description ? { description: patch.description } : {}),
-          ...(patch.website !== undefined ? { website: patch.website ?? '' } : {}),
-          ...(patch.featured !== undefined ? { featured: patch.featured } : {}),
-          ...(patch.status ? { status: patch.status } : {}),
-          ...(patch.cover ? { coverFrom: patch.cover[0], coverTo: patch.cover[1] } : {}),
-          ...(patch.image !== undefined ? { image: patch.image } : {}),
-        },
-      )
-      setRestaurants((prev) => prev.map((r) => (r.id === id ? adaptRestaurant(restaurant) : r)))
-      void refreshAudit()
-    },
-    [refreshAudit],
-  )
-
-  const removeRestaurant = useCallback(
-    async (id: string) => {
-      await api.del(`/platform/restaurants/${id}`)
-      setRestaurants((prev) => prev.filter((r) => r.id !== id))
-      void refreshAudit()
-    },
-    [refreshAudit],
-  )
-
-  const setRestaurantStatus = useCallback(
-    async (id: string, status: ShowcaseStatus) => {
-      await updateRestaurant(id, { status })
-    },
-    [updateRestaurant],
-  )
-
-  const toggleFeatured = useCallback(
-    async (id: string) => {
-      const target = restaurants.find((r) => r.id === id)
-      await updateRestaurant(id, { featured: !target?.featured })
-    },
-    [restaurants, updateRestaurant],
-  )
-
-  /** Swaps a record with its neighbour, then persists the whole order. */
-  const moveRestaurant = useCallback(
-    async (id: string, direction: -1 | 1) => {
-      const sorted = [...restaurants].sort((a, b) => a.order - b.order)
-      const index = sorted.findIndex((r) => r.id === id)
-      const next = index + direction
-      if (index < 0 || next < 0 || next >= sorted.length) return
-
-      const swapped = [...sorted]
-      ;[swapped[index], swapped[next]] = [swapped[next], swapped[index]]
-      const reordered = swapped.map((r, i) => ({ ...r, order: i + 1 }))
-      setRestaurants(reordered)
-
-      await api.put('/platform/restaurants/order', { order: reordered.map((r) => r.id) })
-    },
-    [restaurants],
-  )
-
-  const publicRestaurants = useMemo(
-    () => restaurants.filter((r) => r.status === 'Active').sort((a, b) => a.order - b.order),
-    [restaurants],
-  )
 
   /* ---------------------------------------------------- feature flags */
 
@@ -441,14 +305,6 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       loading,
-      restaurants,
-      publicRestaurants,
-      addRestaurant,
-      updateRestaurant,
-      removeRestaurant,
-      setRestaurantStatus,
-      toggleFeatured,
-      moveRestaurant,
       flags,
       setFlag,
       isFeatureOn,
@@ -469,14 +325,6 @@ export function PlatformProvider({ children }: { children: ReactNode }) {
     }),
     [
       loading,
-      restaurants,
-      publicRestaurants,
-      addRestaurant,
-      updateRestaurant,
-      removeRestaurant,
-      setRestaurantStatus,
-      toggleFeatured,
-      moveRestaurant,
       flags,
       setFlag,
       isFeatureOn,

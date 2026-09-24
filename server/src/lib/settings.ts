@@ -14,7 +14,6 @@ export interface SystemSettings {
   publicBookingEnabled: boolean
   trackingEnabled: boolean
   registrationEnabled: boolean
-  restaurantSubmissionsEnabled: boolean
   sessionTimeoutMinutes: number
   minPasswordLength: number
   requireStrongPassword: boolean
@@ -31,7 +30,6 @@ export const defaultSystem: SystemSettings = {
   publicBookingEnabled: true,
   trackingEnabled: true,
   registrationEnabled: false,
-  restaurantSubmissionsEnabled: true,
   sessionTimeoutMinutes: 60,
   minPasswordLength: 8,
   requireStrongPassword: true,
@@ -153,39 +151,34 @@ export const defaultNotifications: NotificationSettings = {
   allowManualResend: true,
 }
 
+/**
+ * Landing-page copy the Control Centre can edit.
+ *
+ * Mirrors `LandingContent` in `src/data/platform.ts`, and every field is
+ * rendered by the public page — a CMS field nothing reads lets an
+ * administrator save copy that never appears, with no way to tell.
+ */
 export interface LandingContent {
-  heroBadge: string
-  heroTitleTop: string
+  /** The gold second line of the hero headline. */
   heroTitleAccent: string
+  /** The paragraph under the hero headline. */
   heroSubtitle: string
-  primaryCtaLabel: string
-  secondaryCtaLabel: string
-  showcaseEyebrow: string
-  showcaseTitle: string
-  showcaseLead: string
+  /** The dark panel beside the questions section. */
   finalCtaTitle: string
   finalCtaBody: string
+  /** Optional strip above the header. */
   announcementEnabled: boolean
   announcementText: string
 }
 
 export const defaultLanding: LandingContent = {
-  heroBadge: 'Reservations + machine-learning operations planning',
-  heroTitleTop: 'Fill every table.',
-  heroTitleAccent: 'Plan every shift.',
+  heroTitleAccent: 'and the seat you want.',
   heroSubtitle:
-    'SmartDine Optimizer replaces phone calls, WhatsApp messages and paper records with structured online booking — then forecasts footfall, revenue, food demand and staffing so your team plans service before it starts.',
-  primaryCtaLabel: 'Reserve a table',
-  secondaryCtaLabel: 'Explore the platform',
-  showcaseEyebrow: 'Across Pakistan',
-  showcaseTitle: 'Restaurants building smarter service',
-  showcaseLead:
-    'From the Margalla foothills to the Karachi seafront — a growing directory of dining rooms across Pakistan, curated from the admin console.',
-  finalCtaTitle: 'Ready to see it running?',
-  finalCtaBody:
-    'Book a table the way your guests would, or sign in to the console and walk through the reservation, table, deal, staffing and prediction modules.',
+    'See which tables are free tonight, choose the one you want from the floor plan, and keep a reference you can check any time. No phone calls, no waiting to hear back.',
+  finalCtaTitle: 'Ready when you are',
+  finalCtaBody: 'Pick your table and we will hold it while the restaurant confirms.',
   announcementEnabled: false,
-  announcementText: 'New: the Pakistan restaurant showcase is now live on the landing page.',
+  announcementText: 'Now taking bookings for the weekend — the terrace fills up early.',
 }
 
 export const settingDefaults = {

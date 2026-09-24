@@ -71,12 +71,6 @@ const availability: {
     detail: 'Accounts are invitation-only in this build; leave off unless self-signup ships.',
     endpoint: 'PATCH /admin/system/registration',
   },
-  {
-    key: 'restaurantSubmissionsEnabled',
-    title: 'Restaurant submissions',
-    detail: 'Allows restaurants to submit themselves to the showcase for approval.',
-    endpoint: 'PATCH /admin/system/restaurant-submissions',
-  },
 ]
 
 /** Platform availability, feature flags and data operations. */
@@ -460,7 +454,7 @@ export function SystemPage() {
       <ConfirmDialog
         open={purgeOpen}
         title="Clear demo data?"
-        message="This would remove seeded reservations, restaurants and staff on a real deployment. In this build the data layer is in memory, so a page reload restores it."
+        message="This would remove seeded reservations, tables and staff on a real deployment. Run `npm run db:reset` to restore a known demo state."
         confirmLabel="Continue"
         onCancel={() => setPurgeOpen(false)}
         onConfirm={() => {

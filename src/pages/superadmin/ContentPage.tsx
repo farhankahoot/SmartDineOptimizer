@@ -9,6 +9,7 @@ import { Input, Label, Textarea, Toggle } from '@/components/ui/Field'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { useToast } from '@/components/ui/Toast'
 import { usePlatform } from '@/store/PlatformContext'
+import { useApi } from '@/lib/useApi'
 import type { LandingContent } from '@/data/platform'
 
 interface FieldSpec {
@@ -19,37 +20,34 @@ interface FieldSpec {
   max?: number
 }
 
+/**
+ * Only the copy the public page genuinely renders.
+ *
+ * The badge, the first headline line and the button labels used to be editable
+ * here and are not any more: the page derives the badge and headline from the
+ * restaurant profile, and the buttons change their own label with live
+ * availability ("Choose your table" / "See other times"). A field that saves
+ * successfully and then changes nothing on the page is worse than no field —
+ * there is no way for an administrator to tell it did nothing.
+ */
 const sections: { title: string; description: string; fields: FieldSpec[] }[] = [
   {
     title: 'Hero',
-    description: 'The first thing a visitor reads at the top of the landing page.',
+    description:
+      'The headline and paragraph at the top of the page. The badge above them reads the cuisine and city from Settings › Profile.',
     fields: [
-      { key: 'heroBadge', label: 'Badge text', max: 60 },
-      { key: 'heroTitleTop', label: 'Headline — first line', max: 40 },
-      { key: 'heroTitleAccent', label: 'Headline — accent line', hint: '(shown in gold)', max: 40 },
+      {
+        key: 'heroTitleAccent',
+        label: 'Headline — second line',
+        hint: 'Shown in gold, under "A table at <restaurant>,"',
+        max: 40,
+      },
       { key: 'heroSubtitle', label: 'Supporting paragraph', multiline: true, max: 300 },
     ],
   },
   {
-    title: 'Calls to action',
-    description: 'Button labels. Destinations stay fixed so links can never break.',
-    fields: [
-      { key: 'primaryCtaLabel', label: 'Primary button', hint: '→ /reserve', max: 28 },
-      { key: 'secondaryCtaLabel', label: 'Secondary button', hint: '→ product section', max: 28 },
-    ],
-  },
-  {
-    title: 'Restaurant showcase',
-    description: 'Heading above the Pakistan restaurant carousel.',
-    fields: [
-      { key: 'showcaseEyebrow', label: 'Eyebrow', max: 40 },
-      { key: 'showcaseTitle', label: 'Section title', max: 70 },
-      { key: 'showcaseLead', label: 'Lead paragraph', multiline: true, max: 240 },
-    ],
-  },
-  {
-    title: 'Closing call to action',
-    description: 'The dark panel at the bottom of the page.',
+    title: 'Closing panel',
+    description: 'The dark card beside the questions section, near the foot of the page.',
     fields: [
       { key: 'finalCtaTitle', label: 'Title', max: 60 },
       { key: 'finalCtaBody', label: 'Body', multiline: true, max: 240 },
@@ -62,6 +60,9 @@ export function ContentPage() {
   const { toggle } = useMobileNav()
   const { push } = useToast()
   const { landing, setLanding, resetLanding, log } = usePlatform()
+  // The preview shows the headline's derived first line, so it needs the name.
+  const { data: config } = useApi<{ profile: { name: string } }>('/public/config')
+  const profileName = config?.profile.name ?? 'Asian Wok'
 
   const [saving, setSaving] = useState(false)
   const [resetOpen, setResetOpen] = useState(false)
@@ -93,8 +94,8 @@ export function ContentPage() {
         <div className="flex flex-wrap items-center gap-3 rounded-[10px] border border-line bg-white px-4 py-3">
           <Type className="size-[17px] shrink-0 text-brand-700" />
           <p className="text-[12.5px] text-ink-soft">
-            Copy edits apply immediately. Structural sections — features, workflow, FAQ, comparison
-            — stay in code so the page cannot be broken from here.
+            Copy edits apply immediately. Section headings, the FAQ and anything read from live
+            data stay in code so the page cannot be broken from here.
           </p>
           <Button
             size="sm"
@@ -214,25 +215,26 @@ export function ContentPage() {
           <div className="border-b border-line bg-[#F4F2EF] px-4 py-2.5">
             <p className="text-[11.5px] font-semibold text-ink-soft">Hero preview</p>
           </div>
-          <div className="bg-[#0C0C0E] px-6 py-10 text-center">
-            <span className="inline-flex items-center rounded-full border border-gold-600/40 bg-white/[0.04] px-3.5 py-1.5 text-[11.5px] font-semibold text-gold-300">
-              {landing.heroBadge}
-            </span>
-            <h3 className="mt-4 text-[28px] font-extrabold leading-[1.08] tracking-[-0.03em] text-white">
-              {landing.heroTitleTop}
+          <div className="bg-[#0C0C0E] px-6 py-10">
+            {/*
+              The parts in grey are not editable here — the headline's first
+              line comes from the restaurant name in Settings › Profile. Showing
+              them greyed keeps the preview honest about what this page controls.
+            */}
+            <h3 className="max-w-[520px] text-[26px] font-extrabold leading-[1.08] tracking-[-0.03em] text-white/35">
+              A table at {profileName},
               <br />
               <span className="text-gold-300">{landing.heroTitleAccent}</span>
             </h3>
-            <p className="mx-auto mt-3.5 max-w-[520px] text-[13px] leading-relaxed text-white/75">
+            <p className="mt-3.5 max-w-[480px] text-[13px] leading-relaxed text-white/70">
               {landing.heroSubtitle}
             </p>
-            <div className="mt-5 flex flex-wrap justify-center gap-2.5">
-              <span className="brand-fill rounded-[9px] px-4 py-2 text-[13px] font-semibold text-white">
-                {landing.primaryCtaLabel}
-              </span>
-              <span className="rounded-[9px] border border-white/25 px-4 py-2 text-[13px] font-semibold text-white">
-                {landing.secondaryCtaLabel}
-              </span>
+
+            <div className="mt-7 max-w-[300px] rounded-[12px] border border-white/10 bg-white/[0.04] p-4">
+              <p className="text-[14px] font-extrabold text-white">{landing.finalCtaTitle}</p>
+              <p className="mt-1.5 text-[12px] leading-relaxed text-white/60">
+                {landing.finalCtaBody}
+              </p>
             </div>
           </div>
         </Card>
@@ -241,7 +243,7 @@ export function ContentPage() {
       <ConfirmDialog
         open={resetOpen}
         title="Reset landing page content?"
-        message="Every heading, paragraph and button label returns to the shipped defaults. Restaurant showcase entries are not affected."
+        message="The hero headline, supporting paragraph, closing panel and announcement bar all return to the shipped defaults."
         confirmLabel="Reset content"
         onCancel={() => setResetOpen(false)}
         onConfirm={() => {

@@ -26,7 +26,7 @@ export const publicRouter = Router()
 publicRouter.get(
   '/config',
   route(async (_req, res) => {
-    const [system, landing, rules, profile, hours, slots, deals, showcase, flags] =
+    const [system, landing, rules, profile, hours, slots, deals, flags] =
       await Promise.all([
         getSystem(),
         getSetting('landing.content'),
@@ -35,7 +35,6 @@ publicRouter.get(
         getSetting('restaurant.hours'),
         prisma.timeSlot.findMany({ where: { status: { notIn: ['Closed', 'Blocked'] } }, orderBy: { startTime: 'asc' } }),
         prisma.deal.findMany({ where: { active: true }, orderBy: { priceMinor: 'asc' } }),
-        prisma.showcaseRestaurant.findMany({ where: { status: 'Active' }, orderBy: { sortOrder: 'asc' } }),
         prisma.featureFlag.findMany(),
       ])
 
@@ -47,7 +46,6 @@ publicRouter.get(
         publicBookingEnabled: system.publicBookingEnabled,
         trackingEnabled: system.trackingEnabled,
         registrationEnabled: system.registrationEnabled,
-        restaurantSubmissionsEnabled: system.restaurantSubmissionsEnabled,
       },
       landing,
       profile,
@@ -75,7 +73,6 @@ publicRouter.get(
         price: d.priceMinor / 100,
         items: d.items,
       })),
-      showcase: showcase.map(serializeShowcase),
       features: Object.fromEntries(flags.map((f) => [f.key, f.enabled])),
     })
   }),
@@ -381,102 +378,13 @@ publicRouter.post(
   }),
 )
 
-/** Public showcase carousel (Module: platform content). */
-publicRouter.get(
-  '/showcase',
-  route(async (_req, res) => {
-    const rows = await prisma.showcaseRestaurant.findMany({
-      where: { status: 'Active' },
-      orderBy: [{ featured: 'desc' }, { sortOrder: 'asc' }],
-    })
-    res.json({ restaurants: rows.map(serializeShowcase) })
-  }),
-)
-
-/**
- * A restaurant can submit itself to the directory. Submissions land as
- * "Pending" and never appear publicly until a super admin approves them.
- */
-publicRouter.post(
-  '/showcase/submit',
-  route(async (req, res) => {
-    const system = await getSystem()
-    if (!system.restaurantSubmissionsEnabled) {
-      throw forbidden('Restaurant submissions are closed right now.')
-    }
-
-    const input = parse(
-      z.object({
-        name: z.string().trim().min(2),
-        city: z.string().trim().min(2),
-        province: z.string().trim().min(2),
-        cuisine: z.string().trim().min(2),
-        description: z.string().trim().min(10).max(400),
-        website: z.string().trim().url().optional().or(z.literal('')),
-      }),
-      req.body,
-    )
-
-    const created = await prisma.showcaseRestaurant.create({
-      data: {
-        name: input.name,
-        city: input.city,
-        province: input.province,
-        cuisine: input.cuisine,
-        description: input.description,
-        website: input.website || null,
-        status: 'Pending',
-        sortOrder: 999,
-      },
-    })
-
-    await notifyAdmins({
-      tone: 'warning',
-      title: 'Restaurant awaiting approval',
-      detail: `${created.name} (${created.city}) was submitted to the showcase and is pending review.`,
-      link: '/superadmin/restaurants',
-    })
-    await audit({ actorName: created.name, action: 'Submitted restaurant to showcase', target: created.name, category: 'Restaurant' })
-
-    res.status(201).json({ ok: true, status: 'Pending' })
-  }),
-)
-
 /* ------------------------------------------------------------- helpers */
 
-export function serializeShowcase(r: {
-  id: string
-  name: string
-  city: string
-  province: string
-  cuisine: string
-  description: string
-  imageUrl: string | null
-  coverFrom: string
-  coverTo: string
-  website: string | null
-  featured: boolean
-  status: string
-  sortOrder: number
-  createdAt: Date
-}) {
-  return {
-    id: r.id,
-    name: r.name,
-    city: r.city,
-    province: r.province,
-    cuisine: r.cuisine,
-    description: r.description,
-    image: r.imageUrl ?? undefined,
-    cover: [r.coverFrom, r.coverTo] as [string, string],
-    website: r.website ?? undefined,
-    featured: r.featured,
-    status: r.status,
-    order: r.sortOrder,
-    addedOn: r.createdAt,
-  }
-}
-
+/**
+ * The tracker confirms a booking to someone who already knows its reference,
+ * so it shows enough contact detail to recognise the booking as theirs and no
+ * more — a reference alone must not hand over a full phone number or address.
+ */
 function maskPhone(phone: string): string {
   const digits = phone.replace(/\D/g, '')
   if (digits.length < 4) return '•••'

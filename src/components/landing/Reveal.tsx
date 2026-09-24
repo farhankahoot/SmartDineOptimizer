@@ -85,8 +85,17 @@ export function Reveal({
   return (
     <Tag
       ref={ref as never}
+      /*
+       * `data-shown` lets children run their own entrance without each one
+       * needing its own observer: a descendant styles itself with
+       * `group-data-[shown=true]/reveal:…` and animates when this block does.
+       * The group is named so it cannot collide with a `group` a caller sets
+       * on its own markup for hover.
+       */
+      data-shown={shown ? 'true' : 'false'}
       style={shown ? { transitionDelay: `${delay}ms` } : undefined}
       className={cn(
+        'group/reveal',
         'motion-safe:transition-all motion-safe:duration-[620ms] motion-safe:ease-[cubic-bezier(.22,1,.36,1)]',
         shown ? 'translate-x-0 translate-y-0 scale-100 opacity-100' : hidden,
         className,

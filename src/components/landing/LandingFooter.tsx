@@ -32,7 +32,6 @@ const columns: { title: string; links: FooterLink[] }[] = [
     title: 'About us',
     links: [
       { label: 'Booking with us', href: '#booking' },
-      { label: 'Our restaurants', href: '#restaurants' },
       { label: 'Common questions', href: '#faq' },
       { label: 'Leave feedback', to: '/feedback' },
     ],

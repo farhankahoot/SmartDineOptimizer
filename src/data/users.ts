@@ -1,6 +1,6 @@
 /**
  * Module 8 FE-2 names admin, manager and staff. `superadmin` sits above those
- * three and owns the platform control centre (users, showcase, system, security).
+ * three and owns the platform control centre (users, content, system, security).
  */
 export type Role = 'superadmin' | 'admin' | 'manager' | 'staff'
 
@@ -12,7 +12,7 @@ export const roleLabels: Record<Role, string> = {
 }
 
 export const roleDescriptions: Record<Role, string> = {
-  superadmin: 'Platform owner. Controls users, roles, the public showcase, system availability and security.',
+  superadmin: 'Platform owner. Controls users, roles, landing-page content, system availability and security.',
   admin: 'Runs the restaurant console end to end, including settings and user management.',
   manager: 'Runs day-to-day service across every module; reads settings but cannot change them.',
   staff: 'Front-of-house access to reservations, tables, slots, deals and messaging.',
@@ -48,8 +48,6 @@ export type Permission =
   | 'view:platform'
   | 'manage:platform-users'
   | 'manage:roles'
-  | 'manage:restaurants'
-  | 'manage:showcase'
   | 'manage:content'
   | 'manage:system'
   | 'manage:features'
@@ -110,8 +108,6 @@ export const allPermissions: Permission[] = [
   'view:platform',
   'manage:platform-users',
   'manage:roles',
-  'manage:restaurants',
-  'manage:showcase',
   'manage:content',
   'manage:system',
   'manage:features',
@@ -124,8 +120,6 @@ export const allPermissions: Permission[] = [
 const PLATFORM_ONLY = new Set<Permission>([
   'manage:platform-users',
   'manage:roles',
-  'manage:restaurants',
-  'manage:showcase',
   'manage:content',
   'manage:system',
   'manage:features',
@@ -168,8 +162,6 @@ export const permissionLabels: Record<Permission, string> = {
   'view:platform': 'Platform control centre',
   'manage:platform-users': 'Platform users',
   'manage:roles': 'Roles & permissions',
-  'manage:restaurants': 'Restaurant directory',
-  'manage:showcase': 'Restaurant showcase',
   'manage:content': 'Landing page content',
   'manage:system': 'System controls',
   'manage:features': 'Feature flags',

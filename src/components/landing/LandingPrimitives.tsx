@@ -65,7 +65,7 @@ export function SectionHeading({
         <p
           className={cn(
             'mt-3.5 text-pretty text-[14px] leading-relaxed',
-            tone === 'dark' ? 'text-white/62' : 'text-ink-muted',
+            tone === 'dark' ? 'text-white/60' : 'text-ink-muted',
           )}
         >
           {lead}
@@ -139,7 +139,7 @@ export function IconTile({
         'flex size-[42px] shrink-0 items-center justify-center rounded-[12px] [&>svg]:size-[19px]',
         'motion-safe:transition-transform motion-safe:duration-300 group-hover:-translate-y-0.5',
         tone === 'dark'
-          ? 'bg-gold-400/12 text-gold-300 ring-1 ring-inset ring-gold-400/25'
+          ? 'bg-gold-400/10 text-gold-300 ring-1 ring-inset ring-gold-400/25'
           : 'bg-brand-50 text-brand-700 ring-1 ring-inset ring-brand-100',
         className,
       )}
@@ -154,6 +154,10 @@ export function IconTile({
  *
  * Vertical padding is set once here so sections cannot drift apart, which is
  * what made the previous page feel like separate pages stitched together.
+ *
+ * A section with an `id` is an anchor target, so it also reserves room for the
+ * sticky header — without `scroll-mt` the header covers the heading the
+ * visitor just clicked to reach.
  */
 export function Section({
   children,
@@ -171,6 +175,7 @@ export function Section({
       id={id}
       className={cn(
         'relative px-5 py-16 lg:py-20',
+        id && 'scroll-mt-[68px]',
         tone === 'dark' && 'overflow-hidden bg-[#0C0C0E]',
         tone === 'cream' && 'bg-page',
         tone === 'light' && 'bg-white',
